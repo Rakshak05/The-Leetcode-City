@@ -703,6 +703,7 @@ export default function ShopClient({
   // Track shop page view on mount
   useEffect(() => {
     trackShopPageView();
+    sessionStorage.setItem("leetcodecity:refresh_city", "true");
     // Fire-and-forget daily mission tracking
     fetch("/api/dailies/progress", {
       method: "POST",

@@ -135,20 +135,30 @@ export function levelProgress(xp: number): number {
   return Math.min(1, (xp - current) / delta);
 }
 
-// ─── GitHub XP (log scale) ──────────────────────────────────
+// ─── LeetCode XP (Log Scale + Flat Bonuses) ──────────────────────────────────
 
-export function calculateGithubXp(dev: {
-  contributions: number;
-  total_stars: number;
-  public_repos: number;
-  total_prs: number;
+export function calculateLeetcodeXp(dev: {
+  easy_solved: number;
+  medium_solved: number;
+  hard_solved: number;
+  contest_rating: number;
+  lc_streak: number;
 }): number {
-  return (
-    Math.floor(Math.log2(Math.max(dev.contributions, 1) + 1) * 15) +
-    Math.floor(Math.log2(Math.max(dev.total_stars, 1) + 1) * 10) +
-    Math.floor(Math.log2(Math.max(dev.public_repos, 1) + 1) * 5) +
-    Math.floor(Math.log2(Math.max(dev.total_prs, 1) + 1) * 8)
-  );
+  // Fairly distribute Base XP using logarithmic scaling
+  const solvedXp =
+    Math.floor(Math.log2(Math.max(dev.easy_solved, 1) + 1) * 3) +
+    Math.floor(Math.log2(Math.max(dev.medium_solved, 1) + 1) * 6) +
+    Math.floor(Math.log2(Math.max(dev.hard_solved, 1) + 1) * 12);
+  
+  // High contest ratings exponentially scale better, but bounded realistically
+  const ratingXp = dev.contest_rating > 1400 
+    ? Math.floor(Math.pow((dev.contest_rating - 1400) / 100, 1.5) * 5) 
+    : 0;
+  
+  // Streak directly gives flat scaling points
+  const streakXp = Math.floor(dev.lc_streak * 1.5);
+
+  return solvedXp + ratingXp + streakXp;
 }
 
 // ─── Achievement XP ─────────────────────────────────────────

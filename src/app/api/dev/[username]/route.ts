@@ -36,22 +36,43 @@ const LC_HEADERS = {
   "User-Agent": "Mozilla/5.0",
 };
 
+import { parseMaxStreak } from "@/lib/leetcode";
+import { calculateLeetcodeXp } from "@/lib/xp";
+
 async function fetchLeetCodeUser(username: string) {
-  /* Updated to return rich data including globalRanking */
+  /* Updated to return rich data including globalRanking and max streak */
+  const currentYear = new Date().getFullYear();
+  let aliases = "";
+  for (let y = 2015; y <= currentYear; y++) {
+    aliases += `\n        y${y}: userCalendar(year: ${y}) { submissionCalendar }`;
+  }
+
   const query = `
     query($username: String!) {
       matchedUser(username: $username) {
         username
-        profile { realName userAvatar ranking reputation }
+        profile {
+          realName userAvatar ranking reputation
+          countryName school company websites linkedinUrl twitterUrl githubUrl
+        }
+        badges { id name icon displayName }
         submitStats {
           acSubmissionNum { difficulty count }
           totalSubmissionNum { difficulty count }
         }
-        userCalendar { streak totalActiveDays }
+        tagProblemCounts {
+          advanced { tagName problemsSolved }
+          intermediate { tagName problemsSolved }
+          fundamental { tagName problemsSolved }
+        }
+        userCalendar { streak totalActiveDays }${aliases}
       }
-      userContestRanking(username: $username) { 
-        rating 
+      userContestRanking(username: $username) {
+        rating
         globalRanking
+        attendedContestsCount
+        topPercentage
+        badge { name }
       }
     }
   `;
@@ -62,6 +83,9 @@ async function fetchLeetCodeUser(username: string) {
       body: JSON.stringify({ query, variables: { username } }),
     });
     const json = await res.json();
+    if (json?.data?.matchedUser) {
+       json.data.matchedUser.maxStreak = parseMaxStreak(json.data.matchedUser, currentYear);
+    }
     return json?.data ?? null;
   } catch {
     return null;
@@ -73,8 +97,11 @@ export async function GET(
   { params }: { params: Promise<{ username: string }> }
 ) {
   const { username } = await params;
+  const { searchParams } = new URL(request.url);
+  const forceRefresh = searchParams.get("refresh") === "true";
   const sb = getSupabaseAdmin();
 
+  let cachedRecord = null;
   const { data: cached } = await sb
     .from("developers")
     .select("*")
@@ -83,14 +110,14 @@ export async function GET(
 
   if (cached) {
     const age = Date.now() - new Date(cached.fetched_at).getTime();
-    if (age < 12 * 60 * 60 * 1000) { // 12h cache
-      return NextResponse.json(cached);
+    if (!forceRefresh && age < 12 * 60 * 60 * 1000) { // 12h cache
+      cachedRecord = cached;
     }
   }
 
   // Rate limit check
   let rateLimitKey: string | null = null;
-  if (!cached) {
+  if (!cachedRecord) {
     let key: string;
     try {
       const authClient = await createServerSupabase();
@@ -107,58 +134,108 @@ export async function GET(
     }
   }
 
-  const data = await fetchLeetCodeUser(username);
-  if (!data?.matchedUser) {
-    return NextResponse.json({ error: "User not found on LeetCode" }, { status: 404 });
-  }
+  let upserted = cachedRecord;
 
-  const user = data.matchedUser;
-  const acNums = user.submitStats?.acSubmissionNum ?? [];
-  const totNums = user.submitStats?.totalSubmissionNum ?? [];
-  const getAC = (d: string) => acNums.find((x: any) => x.difficulty === d)?.count ?? 0;
-  const getTot = (d: string) => totNums.find((x: any) => x.difficulty === d)?.count ?? 1;
+  if (!cachedRecord) {
+    const data = await fetchLeetCodeUser(username);
+    if (!data?.matchedUser) {
+      if (cached) return NextResponse.json(cached); // return stale if LC fetch fails
+      return NextResponse.json({ error: "User not found on LeetCode" }, { status: 404 });
+    }
 
-  const totalSolved = getAC("All");
-  const totalSub = getTot("All");
-  const activeDays = user.userCalendar?.totalActiveDays ?? 0;
-  const lcRank = user.profile?.ranking ?? 999999;
-  const litPercentage = Math.min(0.92, Math.max(0.15, activeDays / 365));
+    const user = data.matchedUser;
+    const acNums = user.submitStats?.acSubmissionNum ?? [];
+    const totNums = user.submitStats?.totalSubmissionNum ?? [];
+    const getAC = (d: string) => acNums.find((x: any) => x.difficulty === d)?.count ?? 0;
+    const getTot = (d: string) => totNums.find((x: any) => x.difficulty === d)?.count ?? 1;
 
-  // Stable ID from username
-  let hash = 0;
-  for (const ch of username) hash = (Math.imul(31, hash) + ch.charCodeAt(0)) | 0;
+    const totalSolved = getAC("All");
+    const totalSub = getTot("All");
+    const activeDays = user.userCalendar?.totalActiveDays ?? 0;
+    const lcRank = user.profile?.ranking ?? 999999;
+    const litPercentage = Math.min(0.92, Math.max(0.15, activeDays / 365));
 
-  const record = {
-    github_login: username.toLowerCase(),
-    github_id: Math.abs(hash),
-    name: user.profile?.realName || user.username,
-    avatar_url: user.profile?.userAvatar || "",
-    contributions: Math.max(1, totalSolved),
-    contributions_total: Math.round(litPercentage * 1000),
-    total_stars: user.profile?.reputation || 0,
-    public_repos: Math.max(0, 500000 - lcRank),
-    rank: lcRank,
-    lc_global_rank: lcRank, // Populate official rank
-    fetched_at: new Date().toISOString(),
-    // LC-specific
-    easy_solved: getAC("Easy"),
-    medium_solved: getAC("Medium"),
-    hard_solved: getAC("Hard"),
-    acceptance_rate: totalSub > 0 ? Math.round((totalSolved / totalSub) * 100) / 100 : 0,
-    contest_rating: Math.round(data.userContestRanking?.rating ?? 0),
-    contest_rank: data.userContestRanking?.globalRanking ?? null,
-    lc_streak: user.userCalendar?.streak ?? 0,
-    active_days_last_year: activeDays,
-  };
+    // Stable ID from username
+    let hash = 0;
+    for (const ch of username) hash = (Math.imul(31, hash) + ch.charCodeAt(0)) | 0;
 
-  const { data: upserted, error: upsertError } = await sb
-    .from("developers")
-    .upsert(record, { onConflict: "github_login" })
-    .select()
-    .single();
+    const record = {
+      github_login: username.toLowerCase(),
+      github_id: Math.abs(hash),
+      name: user.profile?.realName || user.username,
+      avatar_url: user.profile?.userAvatar || "",
+      contributions: Math.max(1, totalSolved),
+      contributions_total: Math.round(litPercentage * 1000),
+      total_stars: user.profile?.reputation || 0,
+      public_repos: Math.max(0, 500000 - lcRank),
+      rank: lcRank,
+      lc_global_rank: lcRank, // Populate official rank
+      fetched_at: new Date().toISOString(),
+      // LC-specific
+      easy_solved: getAC("Easy"),
+      medium_solved: getAC("Medium"),
+      hard_solved: getAC("Hard"),
+      acceptance_rate: totalSub > 0 ? Math.round((totalSolved / totalSub) * 100) / 100 : 0,
+      contest_rating: Math.round(data.userContestRanking?.rating ?? 0),
+      contest_rank: data.userContestRanking?.globalRanking ?? null,
+      lc_streak: user.maxStreak ?? user.userCalendar?.streak ?? 0,
+      lc_max_streak: user.maxStreak ?? 0,
+      active_days_last_year: activeDays,
+      total_active_days: activeDays,
+      total_submitted: totalSub,
+      // Contest extended
+      contests_attended: data.userContestRanking?.attendedContestsCount ?? 0,
+      contest_top_percentage: data.userContestRanking?.topPercentage ?? null,
+      contest_badge_name: data.userContestRanking?.badge?.name ?? null,
+      // Badges
+      lc_badge: (user.badges?.length ?? 0) > 0 ? user.badges[user.badges.length - 1].name : null,
+      lc_badges_all: (user.badges ?? []).map((b: any) => ({ name: b.name, icon: b.icon, displayName: b.displayName })),
+      // Profile metadata
+      lc_bio: user.profile?.aboutMe ?? null,
+      lc_country_code: user.profile?.countryName ?? null,
+      lc_school: user.profile?.school ?? null,
+      lc_company: user.profile?.company ?? null,
+      lc_website: user.profile?.websites?.[0] ?? null,
+      lc_twitter: user.profile?.twitterUrl ?? null,
+      lc_linkedin: user.profile?.linkedinUrl ?? null,
+      lc_github: user.profile?.githubUrl ?? null,
+      // Tag stats
+      lc_tag_stats: [
+        ...(user.tagProblemCounts?.advanced ?? []),
+        ...(user.tagProblemCounts?.intermediate ?? []),
+        ...(user.tagProblemCounts?.fundamental ?? []),
+      ]
+        .sort((a: any, b: any) => b.problemsSolved - a.problemsSolved)
+        .slice(0, 20)
+        .map((t: any) => ({ name: t.tagName, solved: t.problemsSolved })),
+    };
 
-  if (upsertError) {
-    return NextResponse.json({ error: "Database error" }, { status: 500 });
+    const newBaseXp = calculateLeetcodeXp({
+      easy_solved: record.easy_solved,
+      medium_solved: record.medium_solved,
+      hard_solved: record.hard_solved,
+      contest_rating: record.contest_rating,
+      lc_streak: record.lc_streak
+    });
+
+    // We must merge new Base XP with existing Base XP safely. 
+    // Wait to upsert until we check if the user exists so we know what to append.
+    let mergeRecord = { ...record, xp_github: newBaseXp, xp_total: newBaseXp };
+    
+    if (cached) {
+        mergeRecord.xp_total = (cached.xp_total - cached.xp_github) + newBaseXp;
+    }
+
+    const { data: upsertedResult, error: upsertError } = await sb
+      .from("developers")
+      .upsert(mergeRecord, { onConflict: "github_login" })
+      .select()
+      .single();
+
+    if (upsertError) {
+      return NextResponse.json({ error: "Database error" }, { status: 500 });
+    }
+    upserted = upsertedResult;
   }
 
   // Round 2: Fetch customizations and items to return a full building record

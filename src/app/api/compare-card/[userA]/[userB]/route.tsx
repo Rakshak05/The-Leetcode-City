@@ -14,12 +14,12 @@ const i18n: Record<Lang, {
   wins: string; tie: string; notFound: string; cta: string;
 }> = {
   en: {
-    rank: "RANK", contribs: "CONTRIBS", stars: "STARS", repos: "REPOS", kudos: "KUDOS",
+    rank: "RANK", contribs: "SOLVED", stars: "REP.", repos: "LC RANK", kudos: "KUDOS",
     wins: "wins", tie: "Tie", notFound: "Comparison not found",
     cta: "Who wins? → theleetcodecity.tech",
   },
   pt: {
-    rank: "RANK", contribs: "COMMITS", stars: "ESTRELAS", repos: "REPOS", kudos: "KUDOS",
+    rank: "RANK", contribs: "RESOLVIDOS", stars: "REP.", repos: "LC RANK", kudos: "KUDOS",
     wins: "vence", tie: "Empate", notFound: "Comparacao nao encontrada",
     cta: "Quem ganha? → theleetcodecity.tech",
   },

@@ -200,7 +200,7 @@ export default function DailiesWidget({ data, accent, shadow, isMobile, onClaim,
               </span>
               <div className="min-w-0 flex-1">
                 <div className={`leading-tight font-bold ${isMobile ? "text-[12px]" : "text-[10px]"}`} style={{ color: "#FFD700" }}>
-                  {starVerifying ? "Verifying..." : starOpened ? "I starred it — Verify" : "Star on LeetCode"}
+                  {starVerifying ? "Verifying..." : starOpened ? "I starred it — Verify" : "Star on GitHub"}
                 </div>
                 <div className={`mt-0.5 leading-tight ${isMobile ? "text-[10px]" : "text-[9px]"}`} style={{ color: "#FFD700", opacity: 0.7 }}>
                   {starOpened ? "Click to check or wait..." : "Star the repo to unlock an exclusive item"}

@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { createServerSupabase } from "@/lib/supabase-server";
 import { getSupabaseAdmin } from "@/lib/supabase";
-import { fetchLeetCodeAboutMe } from "@/lib/leetcode";
+import { fetchLeetCodeAboutMe, parseMaxStreak } from "@/lib/leetcode";
+import { calculateLeetcodeXp } from "@/lib/xp";
 
 export async function POST(req: Request) {
     try {
@@ -47,10 +48,15 @@ export async function POST(req: Request) {
         }
 
         // Fetch full LC stats: easy/medium/hard, contest rating, streak
-        let lcUserStats = null;
+        let lcUserStats: any = null;
         let lcContestStats = null;
         let lcStreakStats = null;
         try {
+            const currentYear = new Date().getFullYear();
+            let aliases = "";
+            for (let y = 2015; y <= currentYear; y++) {
+                aliases += `\n                        y${y}: userCalendar(year: ${y}) { submissionCalendar }`;
+            }
             const profileQuery = `
                 query getUserProfile($username: String!) {
                     matchedUser(username: $username) {
@@ -61,19 +67,34 @@ export async function POST(req: Request) {
                             aboutMe
                             ranking
                             reputation
+                            countryName
+                            school
+                            company
+                            websites
+                            linkedinUrl
+                            twitterUrl
+                            githubUrl
                         }
+                        badges { id name icon displayName }
                         submitStats {
                             acSubmissionNum { difficulty count }
                             totalSubmissionNum { difficulty count }
                         }
+                        tagProblemCounts {
+                            advanced { tagName problemsSolved }
+                            intermediate { tagName problemsSolved }
+                            fundamental { tagName problemsSolved }
+                        }
                         userCalendar {
                             streak
                             totalActiveDays
-                        }
+                        }${aliases}
                     }
                     userContestRanking(username: $username) {
                         rating
                         globalRanking
+                        attendedContestsCount
+                        topPercentage
                         badge { name }
                     }
                 }
@@ -87,6 +108,9 @@ export async function POST(req: Request) {
             lcUserStats = statsJson?.data?.matchedUser;
             lcContestStats = statsJson?.data?.userContestRanking;
             lcStreakStats = statsJson?.data?.matchedUser?.userCalendar;
+            if (lcUserStats) {
+                lcUserStats.maxStreak = parseMaxStreak(lcUserStats, currentYear);
+            }
         } catch { }
 
         // Parse solved counts by difficulty
@@ -109,8 +133,41 @@ export async function POST(req: Request) {
 
         const contest_rating = Math.round(lcContestStats?.rating ?? 0);
         const contest_rank = lcContestStats?.globalRanking ?? null;
-        const lc_streak = lcStreakStats?.streak ?? 0;
+        const lc_streak = lcUserStats?.maxStreak ?? lcStreakStats?.streak ?? 0;
+        const lc_max_streak = lcUserStats?.maxStreak ?? 0;
         const active_days_last_year = lcStreakStats?.totalActiveDays ?? 0;
+        const total_active_days = lcStreakStats?.totalActiveDays ?? 0;
+
+        // Contest extended stats
+        const contests_attended = lcContestStats?.attendedContestsCount ?? 0;
+        const contest_top_percentage = lcContestStats?.topPercentage ?? null;
+        const contest_badge_name = lcContestStats?.badge?.name ?? null;
+
+        // Badges
+        const badges: { id: string; name: string; icon: string; displayName: string }[] = lcUserStats?.badges ?? [];
+        const lc_badges_all = badges.map((b) => ({ name: b.name, icon: b.icon, displayName: b.displayName }));
+        const lc_badge = badges.length > 0 ? badges[badges.length - 1].name : null;
+
+        // Profile metadata
+        const lc_bio = lcUserStats?.profile?.aboutMe ?? null;
+        const lc_country_code = lcUserStats?.profile?.countryName ?? null;
+        const lc_school = lcUserStats?.profile?.school ?? null;
+        const lc_company = lcUserStats?.profile?.company ?? null;
+        const lc_website = lcUserStats?.profile?.websites?.[0] ?? null;
+        const lc_twitter = lcUserStats?.profile?.twitterUrl ?? null;
+        const lc_linkedin = lcUserStats?.profile?.linkedinUrl ?? null;
+        const lc_github = lcUserStats?.profile?.githubUrl ?? null;
+
+        // Tag problem stats: merge advanced + intermediate + fundamental
+        const tagCounts = lcUserStats?.tagProblemCounts;
+        const lc_tag_stats = [
+            ...(tagCounts?.advanced ?? []),
+            ...(tagCounts?.intermediate ?? []),
+            ...(tagCounts?.fundamental ?? []),
+        ]
+            .sort((a: any, b: any) => b.problemsSolved - a.problemsSolved)
+            .slice(0, 20)
+            .map((t: any) => ({ name: t.tagName, solved: t.problemsSolved }));
 
         // litPercentage = how lit the building windows are
         // For LC: active_days / 365 (capped at 1.0), same mechanic as LeetCode City uses commit frequency
@@ -133,6 +190,8 @@ export async function POST(req: Request) {
         // Store `500000 - lcRank` in `public_repos` so building height calculation rewards better rank
         // (lower rank number = better = bigger building, since the height formula rewards higher public_repos)
         const rankBoost = Math.max(0, 500000 - rank);
+
+        const newBaseXp = calculateLeetcodeXp({ easy_solved, medium_solved, hard_solved, contest_rating, lc_streak });
 
         const { data: upsertData, error: upsertError } = await admin
             .from("developers")
@@ -159,7 +218,30 @@ export async function POST(req: Request) {
                 contest_rating: contest_rating,
                 contest_rank: contest_rank,
                 lc_streak: lc_streak,
+                lc_max_streak: lc_max_streak,
                 active_days_last_year: active_days_last_year,
+                total_active_days: total_active_days,
+                total_submitted: total_submitted,
+                // Contest extended
+                contests_attended: contests_attended,
+                contest_top_percentage: contest_top_percentage,
+                contest_badge_name: contest_badge_name,
+                // Badges
+                lc_badge: lc_badge,
+                lc_badges_all: lc_badges_all,
+                // Profile metadata
+                lc_bio: lc_bio,
+                lc_country_code: lc_country_code,
+                lc_school: lc_school,
+                lc_company: lc_company,
+                lc_website: lc_website,
+                lc_twitter: lc_twitter,
+                lc_linkedin: lc_linkedin,
+                lc_github: lc_github,
+                // Tag stats
+                lc_tag_stats: lc_tag_stats,
+                xp_github: newBaseXp,
+                xp_total: newBaseXp,
                 // Store litPercentage so city layout uses submission-frequency window brightness
                 contributions_total: Math.round(litPercentage * 1000), // encode as int (0-1000)
             }, { onConflict: "github_login" })

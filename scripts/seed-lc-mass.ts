@@ -9,6 +9,7 @@
  */
 
 import { createClient } from "@supabase/supabase-js";
+import { parseMaxStreak } from "../src/lib/leetcode";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -75,7 +76,10 @@ async function fetchLCUserStats(username: string) {
           acSubmissionNum { difficulty count }
           totalSubmissionNum { difficulty count }
         }
-        userCalendar { streak totalActiveDays }
+        userCalendar { streak totalActiveDays }${
+            Array.from({ length: new Date().getFullYear() - 2014 }, (_, i) => 2015 + i)
+                .map(y => `\n        y${y}: userCalendar(year: ${y}) { submissionCalendar }`).join("")
+        }
       }
       userContestRanking(username: $username) { rating }
     }
@@ -109,7 +113,7 @@ async function upsertUser(username: string, data: any): Promise<boolean> {
     const medSolved = getAC("Medium");
     const hardSolved = getAC("Hard");
     const activeDays = user.userCalendar?.totalActiveDays ?? 0;
-    const streak = user.userCalendar?.streak ?? 0;
+    const streak = parseMaxStreak(user, new Date().getFullYear()) || user.userCalendar?.streak || 0;
     const lcRank = user.profile?.ranking ?? 999999;
     const reputation = user.profile?.reputation ?? 0;
     const contestRating = Math.round(data?.userContestRanking?.rating ?? 0);

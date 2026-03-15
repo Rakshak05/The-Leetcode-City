@@ -488,6 +488,8 @@ function HomeContent() {
   const [signInPromptVisible, setSignInPromptVisible] = useState(false);
   const [adToast, setAdToast] = useState<string | null>(null);
 
+  // State for refreshing developer stats
+  const [refreshingStats, setRefreshingStats] = useState(false);
   // Welcome CTA (shown after intro for non-logged-in users)
   const [welcomeCtaVisible, setWelcomeCtaVisible] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -669,6 +671,40 @@ function HomeContent() {
     const id = setInterval(ping, 5 * 60 * 1000); // every 5 minutes
     return () => clearInterval(id);
   }, [session, linkedLeetCodeUsername]);
+
+  // ── Auto-refresh: silently update logged-in user's own LC stats every hour ──
+  useEffect(() => {
+    if (!linkedLeetCodeUsername) return;
+
+    const silentRefresh = async () => {
+      try {
+        const res = await fetch(`/api/dev/${encodeURIComponent(linkedLeetCodeUsername)}?refresh=true`);
+        if (!res.ok) return;
+        const devData = await res.json();
+        const foundIdx = rawDevsRef.current.findIndex(
+          (d) => d.github_login.toLowerCase() === devData.github_login?.toLowerCase()
+        );
+        if (foundIdx !== -1) {
+          rawDevsRef.current[foundIdx] = { ...rawDevsRef.current[foundIdx], ...devData };
+          const layout = generateCityLayout(rawDevsRef.current);
+          setBuildings(layout.buildings);
+          // If their own building is currently selected, refresh the panel too
+          setSelectedBuilding((prev) => {
+            if (!prev || prev.login.toLowerCase() !== devData.github_login?.toLowerCase()) return prev;
+            return layout.buildings.find(
+              (b) => b.login.toLowerCase() === devData.github_login?.toLowerCase()
+            ) ?? prev;
+          });
+        }
+      } catch { /* silent */ }
+    };
+
+    // Wait 10 seconds after login/link so city is fully loaded, then refresh once
+    const initialDelay = setTimeout(silentRefresh, 10_000);
+    // Then refresh every 60 minutes automatically
+    const interval = setInterval(silentRefresh, 60 * 60 * 1000);
+    return () => { clearTimeout(initialDelay); clearInterval(interval); };
+  }, [linkedLeetCodeUsername]);
 
   const authLogin = (
     session?.user?.user_metadata?.user_name ??
@@ -1155,7 +1191,9 @@ function HomeContent() {
 
     // Return visit: restore from cache or fetch silently
     const cached = getCityCache();
-    if (cached) {
+    const needsRefresh = sessionStorage.getItem("leetcodecity:refresh_city") === "true";
+
+    if (cached && !needsRefresh) {
       setBuildings(cached.buildings);
       setPlazas(cached.plazas);
       setDecorations(cached.decorations);
@@ -1206,7 +1244,12 @@ function HomeContent() {
         // Fallback to chunked API
         if (allDevs.length === 0) {
           const CHUNK = 1000;
-          const res = await fetch(`/api/city?from=0&to=${CHUNK}`);
+          const cacheBuster = needsRefresh ? `&t=${Date.now()}` : "";
+          if (needsRefresh) {
+            sessionStorage.removeItem("leetcodecity:refresh_city");
+          }
+
+          const res = await fetch(`/api/city?from=0&to=${CHUNK}${cacheBuster}`);
           if (!res.ok) throw new Error("Failed to fetch city data");
           const data = await res.json();
           allDevs = data.developers ?? [];
@@ -1217,7 +1260,7 @@ function HomeContent() {
             const promises: Promise<{ developers: typeof data.developers } | null>[] = [];
             for (let from = CHUNK; from < total; from += CHUNK) {
               promises.push(
-                fetch(`/api/city?from=${from}&to=${from + CHUNK}`)
+                fetch(`/api/city?from=${from}&to=${from + CHUNK}${cacheBuster}`)
                   .then((r) => (r.ok ? r.json() : null))
               );
             }
@@ -1665,6 +1708,29 @@ function HomeContent() {
       setResetMsg("Error: " + err.message);
     } finally {
       setResetting(false);
+    }
+  };
+
+  const handleRefreshStats = async () => {
+    if (!selectedBuilding) return;
+    setRefreshingStats(true);
+    try {
+      const res = await fetch(`/api/dev/${encodeURIComponent(selectedBuilding.login)}?refresh=true`);
+      if (!res.ok) throw new Error("Failed to refresh stats");
+      const devData = await res.json();
+      
+      const foundIdx = rawDevsRef.current.findIndex(d => d.github_login.toLowerCase() === devData.github_login.toLowerCase());
+      if (foundIdx !== -1) {
+        rawDevsRef.current[foundIdx] = { ...rawDevsRef.current[foundIdx], ...devData };
+        const layout = generateCityLayout(rawDevsRef.current);
+        setBuildings(layout.buildings);
+        const updated = layout.buildings.find(b => b.login.toLowerCase() === selectedBuilding.login.toLowerCase());
+        if (updated) setSelectedBuilding(updated);
+      }
+    } catch (err) {
+      // ignore
+    } finally {
+      setRefreshingStats(false);
     }
   };
 
@@ -3373,7 +3439,17 @@ function HomeContent() {
                       </span>
                     )}
                   </div>
-                  <p className="truncate text-[10px] text-muted">@{selectedBuilding.login}</p>
+                  <div className="mt-0.5 flex items-center gap-2">
+                    <p className="truncate text-[10px] text-muted">@{selectedBuilding.login}</p>
+                    <button
+                      onClick={handleRefreshStats}
+                      disabled={refreshingStats}
+                      className="text-[10px] text-muted transition-colors hover:text-cream disabled:opacity-50"
+                      title="Refresh Stats"
+                    >
+                      {refreshingStats ? "..." : "↻"}
+                    </button>
+                  </div>
                   {selectedBuilding.active_raid_tag && (
                     <p className="text-[8px] text-red-400">
                       Attacked by @{selectedBuilding.active_raid_tag.attacker_login}

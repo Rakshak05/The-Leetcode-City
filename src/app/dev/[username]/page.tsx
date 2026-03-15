@@ -36,11 +36,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { username } = await params;
   const dev = await getDeveloper(username);
 
-  return { title: "Developer Not Found - LeetCode City" };
+  if (!dev) {
+    return { title: "Developer Not Found - LeetCode City" };
+  }
 
   const contribs = (dev.contributions_total && dev.contributions_total > 0) ? dev.contributions_total : dev.contributions;
-  const title = `@${dev.github_login} - LeetCode City | ${contribs.toLocaleString()} contributions`;
-  const description = `See @${dev.github_login}'s building in LeetCode City. ${contribs.toLocaleString()} contributions, ${dev.public_repos.toLocaleString()} repos, ${dev.total_stars.toLocaleString()} stars. Rank #${dev.rank ?? "?"} in the city.`;
+  const title = `@${dev.github_login} - LeetCode City | ${contribs.toLocaleString()} solved`;
+  const description = `See @${dev.github_login}'s building in LeetCode City. ${contribs.toLocaleString()} solved, ${dev.total_stars.toLocaleString()} reputation. Rank #${dev.rank ?? "?"} in the city.`;
 
   return {
     title,

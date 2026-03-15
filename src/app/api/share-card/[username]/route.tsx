@@ -36,18 +36,18 @@ const i18n: Record<Lang, {
 }> = {
   en: {
     inTheCity: "in the city",
-    commits: "COMMITS",
-    repos: "REPOS",
-    stars: "STARS",
+    commits: "SOLVED",
+    repos: "LC RANK",
+    stars: "REP.",
     kudos: "KUDOS",
     cta: "Can you beat this?",
     notFound: "Developer not found",
   },
   pt: {
     inTheCity: "na cidade",
-    commits: "COMMITS",
-    repos: "REPOS",
-    stars: "ESTRELAS",
+    commits: "RESOLVIDOS",
+    repos: "LC RANK",
+    stars: "REP.",
     kudos: "KUDOS",
     cta: "Consegue me superar?",
     notFound: "Desenvolvedor nao encontrado",
@@ -582,8 +582,8 @@ function renderStories(
 
   const stats = [
     { label: t.commits, value: contributions.toLocaleString() },
-    { label: t.repos, value: (dev.public_repos as number).toLocaleString() },
-    { label: t.stars, value: (dev.total_stars as number).toLocaleString() },
+    { label: t.stars, value: dev.total_stars?.toLocaleString() || "0" },
+    { label: t.repos, value: (dev.rank as number)?.toLocaleString() ?? (dev.public_repos as number).toLocaleString() },
   ];
 
   return new ImageResponse(
