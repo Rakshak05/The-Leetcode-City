@@ -402,7 +402,29 @@ export default memo(function InstancedBuildings({
       risingRef.current = [];
     }
 
+    // Safety net: if buildings are still at rise=0 after 8 seconds
+    // (e.g. holdRise got stuck, animation race condition, etc.),
+    // force them visible so the city never appears empty.
+    const safetyTimer = setTimeout(() => {
+      const m = meshRef.current;
+      if (!m) return;
+      const attr = m.geometry.getAttribute("aRise") as THREE.InstancedBufferAttribute | undefined;
+      if (!attr) return;
+      const arr = attr.array as Float32Array;
+      let anyZero = false;
+      for (let i = 0; i < arr.length; i++) {
+        if (arr[i] < 0.99) { arr[i] = 1; anyZero = true; }
+      }
+      if (anyZero) {
+        attr.needsUpdate = true;
+        riseInitialized.current = true;
+        risingRef.current = [];
+      }
+    }, 8000);
+
     mesh.count = count;
+
+    return () => clearTimeout(safetyTimer);
   }, [buildings, count, uvFrontData, uvSideData, riseData, tintData, liveData, lcData]);
 
   // Sync fog uniforms (only when values actually change, e.g. theme switch)
