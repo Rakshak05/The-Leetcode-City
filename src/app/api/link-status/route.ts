@@ -24,8 +24,10 @@ export async function GET() {
     return NextResponse.json({ linked: false });
   }
 
+  const linked = Boolean(dev.lc_username);
   return NextResponse.json({
-    linked: true,
-    lcUsername: dev.lc_username ?? dev.github_login,
+    linked,
+    githubLogin: dev.github_login,
+    ...(linked ? { lcUsername: dev.lc_username } : {}),
   });
 }
