@@ -38,16 +38,23 @@ jobs:
 
             // ----------------------------------------------------------------
             // 1. Parse a linked issue number from the PR body.
-            //    Matches: closes/fixes/resolves #123  (case-insensitive)
+            //    Matches: closes/fixes/resolves #123, #124, and #125 (case-insensitive)
             // ----------------------------------------------------------------
-            const LINK_REGEX =
-              /(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+#(\d+)/gi;
-
+            // Find all blocks that start with a closing keyword and are followed by issue numbers
+            const BLOCK_REGEX = /(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)(?:\s*(?:and|,)?\s*#\d+)+/gi;
+            
             const issueNumbers = [];
-            let match;
-            while ((match = LINK_REGEX.exec(prBody)) !== null) {
-              issueNumbers.push(parseInt(match[1], 10));
+            let blockMatch;
+            while ((blockMatch = BLOCK_REGEX.exec(prBody)) !== null) {
+              const numRegex = /#(\d+)/g;
+              let numMatch;
+              while ((numMatch = numRegex.exec(blockMatch[0])) !== null) {
+                issueNumbers.push(parseInt(numMatch[1], 10));
+              }
             }
+            
+            // Remove duplicates
+            const uniqueIssueNumbers = [...new Set(issueNumbers)];
 
             const SENTINEL_NO_LINK  = '<!-- pr-issue-check: no-link -->';
             const SENTINEL_NOT_ASSIGNED = '<!-- pr-issue-check: not-assigned -->';
@@ -98,7 +105,7 @@ jobs:
             // 3. Linked issue(s) found — check assignment for each one.
             //    We validate all linked issues and act on the first violation.
             // ----------------------------------------------------------------
-            for (const issueNumber of issueNumbers) {
+            for (const issueNumber of uniqueIssueNumbers) {
               let issue;
               try {
                 const { data } = await github.rest.issues.get({
