@@ -36,7 +36,7 @@ export async function POST(request: Request) {
   }
 
   const admin = getSupabaseAdmin();
-  const attackerColumns = "id, claimed, app_streak, github_login, avatar_url, current_week_contributions, current_week_kudos_given, owned_items";
+  const attackerColumns = "id, claimed, app_streak, github_login, avatar_url, current_week_contributions, current_week_kudos_given";
 
   // Fetch attacker
   const attacker = await findRaidAttackerForUser(admin, user, attackerColumns);
@@ -44,6 +44,26 @@ export async function POST(request: Request) {
   if (!attacker || !attacker.claimed) {
     return NextResponse.json({ error: "Must claim building first" }, { status: 403 });
   }
+
+  // Compile attacker's owned items from purchases
+  const [purchasesRes, giftPurchasesRes] = await Promise.all([
+    admin
+      .from("purchases")
+      .select("item_id")
+      .eq("developer_id", attacker.id)
+      .is("gifted_to", null)
+      .eq("status", "completed"),
+    admin
+      .from("purchases")
+      .select("item_id")
+      .eq("gifted_to", attacker.id)
+      .eq("status", "completed"),
+  ]);
+
+  attacker.owned_items = [
+    ...(purchasesRes.data ?? []).map((p) => p.item_id),
+    ...(giftPurchasesRes.data ?? []).map((p) => p.item_id),
+  ];
 
   // Fetch defender
   const defenderRes = await admin
