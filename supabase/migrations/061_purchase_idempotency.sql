@@ -65,3 +65,30 @@ BEGIN
   RETURN NEXT;
 END;
 $$;
+
+-- ─── 4. Atomic Points Add (rollback) ──────────────────────────
+CREATE OR REPLACE FUNCTION add_points_atomic(
+  p_developer_id BIGINT,
+  p_price_points INTEGER
+) RETURNS TABLE(success BOOLEAN, remaining_points INTEGER)
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_remaining INTEGER;
+BEGIN
+  UPDATE developers
+  SET points = points + p_price_points
+  WHERE id = p_developer_id
+  RETURNING points INTO v_remaining;
+
+  IF FOUND THEN
+    success := true;
+    remaining_points := v_remaining;
+  ELSE
+    success := false;
+    remaining_points := 0;
+  END IF;
+
+  RETURN NEXT;
+END;
+$$;

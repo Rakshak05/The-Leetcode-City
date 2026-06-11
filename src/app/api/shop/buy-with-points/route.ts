@@ -98,10 +98,10 @@ export async function POST(request: Request) {
                 p_developer_id: dev.id,
                 p_price_points: item.price_points,
             })
-            .select("remaining_points")
+            .select("success, remaining_points")
             .maybeSingle();
 
-        if (deductError || !deducted) {
+        if (deductError || !deducted?.success) {
             return NextResponse.json({ error: "Not enough points or a concurrent purchase already deducted your balance. Please try again." }, { status: 409 });
         }
         deductedPoints = deducted.remaining_points;
@@ -128,11 +128,11 @@ export async function POST(request: Request) {
 
     if (purchaseError) {
         if (!isDev) {
-            // Safe rollback: add price back to current DB value, not snapshot
-            await admin
-                .from("developers")
-                .update({ points: deductedPoints + item.price_points })
-                .eq("id", dev.id);
+            // Atomic rollback — add points back to the current DB value
+            await admin.rpc("add_points_atomic", {
+                p_developer_id: dev.id,
+                p_price_points: item.price_points,
+            });
         }
         return NextResponse.json({ error: "Failed to record purchase" }, { status: 500 });
     }
