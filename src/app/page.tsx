@@ -686,13 +686,17 @@ function HomeContent() {
   const [vsCodeKeyLoading, setVsCodeKeyLoading] = useState(false);
   const [vsCodeKeyCopied, setVsCodeKeyCopied] = useState(false);
   const [codingPanelOpen, setCodingPanelOpen] = useState(false);
+  const mountedRef = useRef(true);
 
   useEffect(() => {
     if (codingPanelOpen && hasVsCodeKey === null) {
-      fetch(`/api/vscode-key?t=${Date.now()}`, { cache: "no-store" })
+      const controller = new AbortController();
+      mountedRef.current = true;
+
+      fetch(`/api/vscode-key?t=${Date.now()}`, { cache: "no-store", signal: controller.signal })
         .then(r => r.json())
         .then(d => {
-          if (typeof d.hasKey === "boolean") {
+          if (mountedRef.current && typeof d.hasKey === "boolean") {
             setHasVsCodeKey(d.hasKey);
             try {
               if (d.hasKey) localStorage.setItem("leetcodecity_has_vscode_key", "1");
@@ -701,6 +705,11 @@ function HomeContent() {
           }
         })
         .catch(() => { });
+
+      return () => {
+        mountedRef.current = false;
+        controller.abort();
+      };
     }
   }, [codingPanelOpen, hasVsCodeKey]);
   const [session, setSession] = useState<Session | null>(null);
