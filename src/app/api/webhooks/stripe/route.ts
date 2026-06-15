@@ -184,41 +184,65 @@ export async function POST(request: Request) {
             sendPurchaseNotification(Number(developerId), githubLogin ?? "", claimedPending.id, itemId);
           }
         } else {
-          // 2. No pending record found; check if this transaction was already processed
-          const { data: existing } = await sb
+          // 2. No pending record found; verify and process this transaction
+          const giftedTo = session.metadata?.gifted_to;
+          const ownerId = giftedTo ? Number(giftedTo) : Number(developerId);
+
+          // Verify amount and currency match the item's expected price
+          const expectedItem = await sb
+            .from("items")
+            .select("price_usd_cents, price_brl_cents")
+            .eq("id", itemId)
+            .single();
+          if (expectedItem.data) {
+            const expectedCents = session.currency === "brl"
+              ? expectedItem.data.price_brl_cents
+              : expectedItem.data.price_usd_cents;
+            if (Number(session.amount_total) !== expectedCents) {
+              console.error(
+                `Price mismatch for item ${itemId}: expected ${expectedCents} ${session.currency}, ` +
+                `got ${session.amount_total}`
+              );
+              break;
+            }
+          }
+
+          // Check if this txId already has a completed/delivered purchase
+          const { data: alreadyProcessed } = await sb
             .from("purchases")
             .select("id, status")
             .eq("provider_tx_id", txId)
+            .in("status", ["completed", "delivered"])
+            .maybeSingle();
+          if (alreadyProcessed) {
+            console.log(`Purchase ${alreadyProcessed.id} already fulfilled — skipping duplicate webhook`);
+            break;
+          }
+
+          // Use the UNIQUE constraint on provider_tx_id to guard against
+          // concurrent insert — only the first webhook wins
+          const { data: inserted } = await sb
+            .from("purchases")
+            .insert({
+              developer_id: Number(developerId),
+              item_id: itemId,
+              provider: "stripe",
+              provider_tx_id: txId,
+              amount_cents: session.amount_total ?? 0,
+              currency: session.currency ?? "usd",
+              status: "processing",
+              ...(giftedTo ? { gifted_to: Number(giftedTo) } : {}),
+            })
+            .select("id")
             .maybeSingle();
 
-          if (!existing) {
-            const giftedTo = session.metadata?.gifted_to;
-            const ownerId = giftedTo ? Number(giftedTo) : Number(developerId);
-            
-            // Atomic insert to ensure only one fulfillment proceeds for this txId
-            const { data: inserted } = await sb
+          if (inserted) {
+            const { status: purchaseStatus } = await fulfillItemPurchase(ownerId, itemId, sb);
+            await sb
               .from("purchases")
-              .insert({
-                developer_id: Number(developerId),
-                item_id: itemId,
-                provider: "stripe",
-                provider_tx_id: txId,
-                amount_cents: session.amount_total ?? 0,
-                currency: session.currency ?? "usd",
-                status: "processing",
-                ...(giftedTo ? { gifted_to: Number(giftedTo) } : {}),
-              })
-              .select("id")
-              .maybeSingle();
-
-            if (inserted) {
-              const { status: purchaseStatus } = await fulfillItemPurchase(ownerId, itemId, sb);
-              await sb
-                .from("purchases")
-                .update({ status: purchaseStatus })
-                .eq("id", inserted.id);
-              await autoEquipIfSolo(ownerId, itemId);
-            }
+              .update({ status: purchaseStatus })
+              .eq("id", inserted.id);
+            await autoEquipIfSolo(ownerId, itemId);
           }
         }
         break;
@@ -270,10 +294,28 @@ export async function POST(request: Request) {
       }
     }
   } catch (err) {
-    // Log but return 200 — we don't want Stripe to retry on business logic errors
-    console.error("Stripe webhook handler error:", err);
+    // Determine if the error is transient (retryable) or permanent
+    const errObj = err as any;
+    const isTransient =
+      // Network-level failures that may succeed on retry
+      errObj?.code === "ECONNRESET" ||
+      errObj?.code === "ETIMEDOUT" ||
+      errObj?.code === "ECONNREFUSED" ||
+      // Supabase/Postgres connection issues
+      errObj?.message?.includes("fetch failed") ||
+      errObj?.message?.includes("database") ||
+      errObj?.message?.includes("timeout") ||
+      // Rate limiting
+      errObj?.status === 429 ||
+      errObj?.code === "PGRST301";
+
+    if (isTransient) {
+      console.error("Transient webhook error — returning 500 for retry:", err);
+      return NextResponse.json({ error: "Retry later" }, { status: 500 });
+    }
+
+    console.error("Permanent webhook error — returning 200:", err);
   }
 
-  // Always return 200 to prevent Stripe retries
   return NextResponse.json({ received: true });
 }
