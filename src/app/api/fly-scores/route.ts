@@ -130,12 +130,12 @@ export async function POST(request: Request) {
   if (insertError?.code === "23505") {
     const { data: existing } = await admin
       .from("fly_scores")
-      .select("id")
+      .select("id, score")
       .eq("developer_id", dev.id)
       .eq("seed", seed)
       .single();
 
-    return NextResponse.json({ id: existing?.id, score, rank_today: null, total: 0 });
+    return NextResponse.json({ id: existing?.id, score: existing?.score ?? score, rank_today: null, total: 0 });
   }
 
   const flyXp = Math.floor(score * 0.1);
