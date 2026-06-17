@@ -208,8 +208,7 @@ describe("POST /api/arena/submit — atomic ratings update", () => {
     expect(json.error).toMatch(/invalid status/i);
   });
 
-  it("rejects self-reported accepted status without going through reward path", async () => {
-    // Ensure the exploit path (status: "accepted" skips allowlist) is blocked
+  it("rejects status values not in the allowlist before reaching any reward path", async () => {
     const res = await POST(
       makeRequest({ problem_id: "any-problem", status: "accepted_cheat" })
     );
@@ -234,6 +233,15 @@ describe("POST /api/arena/submit — atomic ratings update", () => {
     expect(res.status).toBe(400);
     const json = await res.json();
     expect(json.error).toMatch(/size limit/i);
+  });
+
+  it("returns 400 when code is a non-string value (prevents Buffer.byteLength throw)", async () => {
+    const res = await POST(
+      makeRequest({ problem_id: "two-sum", status: "accepted", language: "python", code: {} })
+    );
+    expect(res.status).toBe(400);
+    const json = await res.json();
+    expect(json.error).toMatch(/invalid code/i);
   });
 
   it("returns 400 for a malformed code_hash", async () => {
