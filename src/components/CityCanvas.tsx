@@ -282,26 +282,26 @@ const _rabbitLook = new THREE.Vector3();
 function buildRabbitCurves(plazaX: number, plazaZ: number) {
   // Camera path: orbital start -> descend through city -> pass near rabbit -> climb back to orbital
   const posPoints = [
-    new THREE.Vector3(800, 700, 1000),               // WP0: Orbital start (seamless)
-    new THREE.Vector3(500, 500, 700),                 // WP1: Descending
+    new THREE.Vector3(800, 700, 1000),                // WP0: Orbital start (seamless)
+    new THREE.Vector3(500, 500, 700),                  // WP1: Descending
     new THREE.Vector3(plazaX + 300, 300, plazaZ + 300), // WP2: Approaching
     new THREE.Vector3(plazaX + 100, 80, plazaZ + 100),  // WP3: Close pass (high side)
     new THREE.Vector3(plazaX - 80, 60, plazaZ - 60),    // WP4: Closest point (low swoop)
     new THREE.Vector3(plazaX - 200, 150, plazaZ - 250),  // WP5: Pulling away
-    new THREE.Vector3(200, 450, 400),                 // WP6: Climbing back
+    new THREE.Vector3(200, 450, 400),                  // WP6: Climbing back
     new THREE.Vector3(800, 700, 1000),                // WP7: Orbital end (seamless)
   ];
 
   // Look targets converge on the plaza during the close pass, then drift to city center
   const lookPoints = [
-    new THREE.Vector3(0, 200, 0),                       // WP0: City center
-    new THREE.Vector3(plazaX, 50, plazaZ),              // WP1: Starting to aim at plaza
-    new THREE.Vector3(plazaX, 10, plazaZ),              // WP2: Locked on plaza
-    new THREE.Vector3(plazaX, 5, plazaZ),               // WP3: Locked on plaza (ground level)
-    new THREE.Vector3(plazaX, 5, plazaZ),               // WP4: Holding on plaza
-    new THREE.Vector3(plazaX, 30, plazaZ),              // WP5: Lifting gaze
-    new THREE.Vector3(0, 150, 0),                       // WP6: Drifting to city center
-    new THREE.Vector3(0, 200, 0),                       // WP7: City center (match orbital)
+    new THREE.Vector3(0, 200, 0),                        // WP0: City center
+    new THREE.Vector3(plazaX, 50, plazaZ),               // WP1: Starting to aim at plaza
+    new THREE.Vector3(plazaX, 10, plazaZ),               // WP2: Locked on plaza
+    new THREE.Vector3(plazaX, 5, plazaZ),                // WP3: Locked on plaza (ground level)
+    new THREE.Vector3(plazaX, 5, plazaZ),                // WP4: Holding on plaza
+    new THREE.Vector3(plazaX, 30, plazaZ),               // WP5: Lifting gaze
+    new THREE.Vector3(0, 150, 0),                        // WP6: Drifting to city center
+    new THREE.Vector3(0, 200, 0),                        // WP7: City center (match orbital)
   ];
 
   const posCurve = new THREE.CatmullRomCurve3(posPoints, false, "centripetal");
@@ -488,7 +488,7 @@ function CameraFocus({
     if (controlsRef.current) {
       controlsRef.current.autoRotate = false;
     }
-     
+      
   }, [focusedBuilding, focusedBuildingB, relicFocus, camera, controlsRef]);
 
   useFrame((_, delta) => {
@@ -2047,6 +2047,58 @@ function WallpaperOrbitScene({ speed }: { speed: number }) {
   );
 }
 
+// ─── Cinematic Drone Tour ────────────────────────────────────
+
+export function CinematicDroneTour({ active }: { active: boolean }) {
+  const { camera } = useThree();
+  const targetPos = useRef(new THREE.Vector3(800, 700, 1000));
+  const targetLook = useRef(new THREE.Vector3(0, 200, 0));
+  const currentLook = useRef(new THREE.Vector3(0, 200, 0));
+
+  useEffect(() => {
+    if (!active) return;
+
+    // Initialize look target from current camera state
+    const camDir = new THREE.Vector3();
+    camera.getWorldDirection(camDir);
+    currentLook.current.copy(camera.position).add(camDir.multiplyScalar(100));
+    targetPos.current.copy(camera.position);
+    targetLook.current.copy(currentLook.current);
+
+    const interval = setInterval(() => {
+      // Generate new sweeping coordinates
+      const angle = Math.random() * Math.PI * 2;
+      const radius = 400 + Math.random() * 600;
+      const height = 150 + Math.random() * 400;
+
+      targetPos.current.set(
+        Math.cos(angle) * radius,
+        height,
+        Math.sin(angle) * radius
+      );
+
+      targetLook.current.set(
+        (Math.random() - 0.5) * 400,
+        Math.random() * 200,
+        (Math.random() - 0.5) * 400
+      );
+
+      console.log(`[Cinematic Drone Tour] Sweeping to new vector -> X: ${Math.round(targetPos.current.x)}, Y: ${Math.round(targetPos.current.y)}, Z: ${Math.round(targetPos.current.z)}`);
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [active, camera]);
+
+  useFrame((_, delta) => {
+    if (!active) return;
+    camera.position.lerp(targetPos.current, delta * 0.5);
+    currentLook.current.lerp(targetLook.current, delta * 0.5);
+    camera.lookAt(currentLook.current);
+  });
+
+  return null;
+}
+
 // ─── Main Canvas ─────────────────────────────────────────────
 
 interface Props {
@@ -2093,6 +2145,7 @@ interface Props {
   celebrationActive?: boolean;
   wallpaperMode?: boolean;
   wallpaperSpeed?: number;
+  droneTourMode?: boolean;
   liveByLogin?: Map<string, LiveSession>;
   cityEnergy?: number;
   weatherMode?: "sunny" | "rainy" | "windy" | "stormy" | "snowy";
@@ -2179,6 +2232,7 @@ export default function CityCanvas({
   celebrationActive,
   wallpaperMode,
   wallpaperSpeed,
+  droneTourMode,
   liveByLogin,
   cityEnergy,
   weatherMode = "sunny",
@@ -2284,9 +2338,11 @@ export default function CityCanvas({
         <WallpaperOrbitScene speed={wallpaperSpeed ?? 0.08} />
       ) : (
         <>
-          {!introMode && !rabbitCinematic && !flyMode && (!raidPhase || raidPhase === "idle" || raidPhase === "preview") && (
+          {!introMode && !rabbitCinematic && !flyMode && !droneTourMode && (!raidPhase || raidPhase === "idle" || raidPhase === "preview") && (
             <OrbitScene buildings={buildings} focusedBuilding={focusedBuilding ?? null} focusedBuildingB={focusedBuildingB} />
           )}
+
+          {droneTourMode && <CinematicDroneTour active={droneTourMode} />}
 
           {raidPhase && raidPhase !== "idle" && raidPhase !== "preview" && (
             <RaidSequence3D
