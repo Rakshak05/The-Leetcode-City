@@ -217,7 +217,7 @@ function calcHeightV2(
   maxContribV2: number,
   maxStars: number,
 ): { height: number; composite: number } {
-  const contribs = dev.contributions_total! > 0 ? dev.contributions_total! : dev.contributions;
+  const contribs = dev.contributions;
 
   const cNorm = contribs / Math.max(1, Math.min(maxContribV2, 50_000));
   const sNorm = dev.total_stars / Math.max(1, Math.min(maxStars, 200_000));
@@ -1020,7 +1020,13 @@ export function calcBuildingDims(
   maxContrib: number,
   maxStars: number,
   v2Data?: Partial<DeveloperRecord>,
+  buildingStyle?: string,
 ): { width: number; height: number; depth: number } {
+  // BUNGALOW OVERRIDE — must match generateCityLayout
+  if (buildingStyle === "bungalow") {
+    return { width: 80, height: 25, depth: 60 };
+  }
+
   // V2 path when expanded data is available
   if (v2Data && (v2Data.contributions_total ?? 0) > 0) {
     const dev: DeveloperRecord = {
