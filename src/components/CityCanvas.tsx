@@ -17,6 +17,7 @@ import type { RaidExecuteResponse } from "@/lib/raid";
 import FounderSpire from "./FounderSpire";
 import LeaderboardHolograms from "./LeaderboardHolograms";
 import EArcadeLandmark from "./EArcadeLandmark";
+import DungeonModal from "./DungeonModal";
 
 const Colosseum = lazy(() => import("./Colosseum"));
 const VoidObelisk = lazy(() => import("./VoidObelisk"));
@@ -2214,6 +2215,7 @@ export default function CityCanvas({
   multiplayerPlayers,
 }: Props) {
   const { isRaining } = useWeather();
+  const [dungeonOpen, setDungeonOpen] = useState(false);
   const t = THEMES[themeIndex] ?? THEMES[0];
   const showPerf = typeof window !== "undefined" && new URLSearchParams(window.location.search).has("perf");
   const flyPosRef = useRef(new THREE.Vector3());
@@ -2274,6 +2276,7 @@ export default function CityCanvas({
     return () => clearTimeout(timer);
   }, [visibleBuildings.length, buildings]);
   return (
+    <>
     <Canvas
       camera={{ position: [400, 450, 600], fov: 55, near: 1.0, far: 4000 }}
       dpr={[1, 2]}
@@ -2408,7 +2411,6 @@ export default function CityCanvas({
               themeFace={t.building.face}
             />
             <VoidObelisk onClick={() => { }} position={landmarkPositions[1]} />
-            <DungeonPortal onClick={() => { }} position={landmarkPositions[2]} />
             <AstralObservatory onClick={() => { }} position={landmarkPositions[3]} />
             <CryptOfEchoes onClick={() => { }} position={landmarkPositions[4]} />
             <SunkenSanctum onClick={() => { }} position={landmarkPositions[5]} />
@@ -2494,5 +2496,9 @@ export default function CityCanvas({
       )}
 
     </Canvas>
+    {dungeonOpen && (
+      <DungeonModal onClose={() => setDungeonOpen(false)} />
+    )}
+  </>
   );
 }
