@@ -13,7 +13,7 @@ export function serializeDeveloper(dev: Record<string, unknown>): Record<string,
   for (const key of Object.keys(dev)) {
     if (alwaysKeep.includes(key)) continue;
 
-    const val = dev[key];
+    const val = dev[key] as Record<string, unknown>;
 
     // Omit null/undefined
     if (val === null || val === undefined) continue;
@@ -26,7 +26,7 @@ export function serializeDeveloper(dev: Record<string, unknown>): Record<string,
     }
 
     // Omit empty/default objects
-    if (typeof val === "object" && val !== null) {
+    if (typeof val === "object") {
       if (key === "loadout") {
         const isDefault = !val.crown && !val.roof && !val.aura && !val.faces;
         if (isDefault) continue;
