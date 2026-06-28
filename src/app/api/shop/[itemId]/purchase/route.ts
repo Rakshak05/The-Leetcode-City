@@ -12,8 +12,9 @@ interface PurchaseRequest {
 
 export async function POST(
   request: Request,
-  { params }: { params: { itemId: string } }
+  { params }: { params: Promise<{ itemId: string }> }
 ) {
+  const { itemId } = await params;
   const supabase = await createServerSupabase();
   const {
     data: { user },
@@ -27,8 +28,6 @@ export async function POST(
   if (!ok) {
     return NextResponse.json({ error: "Too fast" }, { status: 429 });
   }
-
-  const itemId = params.itemId;
   if (!itemId) {
     return NextResponse.json({ error: "Missing itemId" }, { status: 400 });
   }
@@ -196,8 +195,9 @@ export async function POST(
 // Webhook handler for Stripe payment completion events
 export async function PATCH(
   request: Request,
-  { params }: { params: { itemId: string } }
+  { params }: { params: Promise<{ itemId: string }> }
 ) {
+  await params;
   const admin = getSupabaseAdmin();
   const body = await request.json().catch(() => ({}));
 
