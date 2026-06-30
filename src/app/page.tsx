@@ -1648,7 +1648,7 @@ function HomeContent() {
     }
 
     loadCity();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [loadStage]);
 
   // City reload on tab return removed — navigating back from shop already
