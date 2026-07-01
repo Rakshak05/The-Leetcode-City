@@ -60,6 +60,10 @@ export async function POST(req: Request) {
     }
 
     // ── Atomic redemption via RPC ─────────────────────────────────────
+    // [Security Hardening - Issue #747]: Validation and redemption tracking
+    // is executed inside a single PostgreSQL/Supabase database transaction
+    // to prevent concurrent race condition bypasses.
+    //
     // redeem_xp_code() does three things atomically:
     //   1. INSERT xp_code_usages ON CONFLICT DO NOTHING — per-user CAS
     //   2. UPDATE xp_redeem_codes SET used_count = used_count + 1

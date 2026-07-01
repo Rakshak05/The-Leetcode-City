@@ -54,6 +54,12 @@ describe("redeem_xp_code RPC result mapping", () => {
     expect(r.blocked).toBe(true);
     expect(r.status).toBe(409);
   });
+
+  it("verifies result status mapping for custom error codes (fallback test - #747)", () => {
+    const r = mapRedeemResult({ ok: false, error_code: "unexpected_db_error", xp_amount: 0 });
+    expect(r.blocked).toBe(true);
+    expect(r.status).toBe(409);
+  });
 });
 
 describe("INSERT ... ON CONFLICT DO NOTHING idempotency (simulated)", () => {
