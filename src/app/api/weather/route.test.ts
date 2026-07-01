@@ -16,7 +16,11 @@ describe("/api/weather route", () => {
   });
 
   afterEach(() => {
-    process.env.OPENWEATHER_API_KEY = originalApiKey;
+    if (originalApiKey === undefined) {
+      delete process.env.OPENWEATHER_API_KEY;
+    } else {
+      process.env.OPENWEATHER_API_KEY = originalApiKey;
+    }
     vi.unstubAllGlobals();
   });
 
