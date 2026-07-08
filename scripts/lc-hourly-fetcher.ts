@@ -3,7 +3,7 @@
  * Runs continuously and refreshes stale developer profiles.
  * Also supports running in `--one-shot` mode for CI/CD and scheduled cron environments (e.g. GitHub Actions).
  *
- * Run:  npx tsx --env-file=.env.local scripts/lc-hourly-fetcher.ts [options]
+ * Run:  npx tsx --env-file=<path_to_env> scripts/lc-hourly-fetcher.ts [options]
  * Options:
  *   --one-shot                 Run one cycle and exit
  *   --limit <number>           Number of profiles to refresh (default: 75)
