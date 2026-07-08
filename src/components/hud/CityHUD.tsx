@@ -11,7 +11,7 @@ import DailiesWidget from "@/components/DailiesWidget";
 import LevelUpToast from "@/components/LevelUpToast";
 import XpBar from "@/components/XpBar";
 import { useCity } from "@/context/CityContext";
-import { MiniLeaderboard } from "@/app/page";
+import MiniLeaderboard from "./MiniLeaderboard";
 import { ITEM_NAMES } from "@/lib/zones";
 
 // Feature flags

@@ -19,6 +19,7 @@ const ZenCodingModal = dynamic(() => import("@/components/ZenCodingModal"), { ss
 const CodeForgeModal = dynamic(() => import("@/components/CodeForgeModal"), { ssr: false });
 const SolanaModal = dynamic(() => import("@/components/SolanaModal"), { ssr: false });
 const FounderMessage = dynamic(() => import("@/components/FounderMessage"), { ssr: false });
+const TransitScreen = dynamic(() => import("@/components/TransitScreen"), { ssr: false });
 
 /* ─── Free Gift Celebration Modal Helper ─── */
 function GiftClaimModal({
@@ -389,6 +390,12 @@ export default function ModalsOverlay() {
     endRabbitCinematic,
     onRabbitCaught,
     rabbitSighting,
+    plazas,
+    transitState,
+    transitMenuOpen,
+    setTransitMenuOpen,
+    transitFrom,
+    handleSelectTransitDestination,
   } = useCity();
 
   const [founderMessageOpen, setFounderMessageOpen] = useState(false);
@@ -520,6 +527,57 @@ export default function ModalsOverlay() {
           authLogin={authLogin}
           trackAdEvents={trackAdEvents}
           trackSkyAdCtaClick={trackSkyAdCtaClick}
+        />
+      )}
+
+      {/* BMTC Bus Route chooser */}
+      {transitMenuOpen && transitFrom && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-[2px]">
+          <div
+            className="w-full max-w-sm border-[4px] border-border bg-bg p-4 shadow-2xl font-pixel text-cream uppercase animate-[fade-in_0.15s_ease-out]"
+            style={{ borderColor: theme.accent }}
+          >
+            <div className="flex justify-between items-center border-b border-border pb-2.5 mb-4">
+              <span className="text-[12px] text-cream flex items-center gap-1.5 font-bold">
+                🚌 BMTC Bus Route Menu
+              </span>
+              <button
+                onClick={() => setTransitMenuOpen(false)}
+                className="text-[10px] text-muted hover:text-cream cursor-pointer"
+              >
+                [X]
+              </button>
+            </div>
+            
+            <p className="text-[9px] text-muted normal-case mb-3">
+              You are at <span className="text-cream font-bold uppercase">{transitFrom.replace('_', ' ')}</span> Bus Stop. Select your destination:
+            </p>
+            
+            <div className="flex flex-col gap-2.5 max-h-[220px] overflow-y-auto pr-1">
+              {plazas
+                .map((p: any) => p.district)
+                .filter((d): d is string => !!d && d !== transitFrom)
+                .map((d: string) => (
+                  <button
+                    key={d}
+                    onClick={() => handleSelectTransitDestination(d)}
+                    className="w-full text-left text-[10px] border-[2px] border-border bg-bg-card hover:bg-bg-raised p-2 transition-colors cursor-pointer flex items-center justify-between"
+                  >
+                    <span>{d.replace('_', ' ')}</span>
+                    <span className="text-[8px] text-muted font-normal">ROUTE 500C</span>
+                  </button>
+                ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Transit Loading Screen */}
+      {transitState?.active && (
+        <TransitScreen
+          fromDistrict={transitState.fromDistrict}
+          toDistrict={transitState.toDistrict}
+          accentColor={theme.accent}
         />
       )}
     </>
