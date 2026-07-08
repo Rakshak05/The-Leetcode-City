@@ -364,6 +364,118 @@ export function HighwayFlyover({ start: startCoords, end: endCoords, labelText }
     return { pillars, lamps };
   }, [start, end, dir, length, angle]);
 
+  // Modern lane markings and guardrails system
+  const roadLinesAndGuardrails = useMemo(() => {
+    const list: React.ReactNode[] = [];
+    const normDir = dir.clone().normalize();
+    const rightOffset = new THREE.Vector3(dir.z, 0, -dir.x).normalize();
+    const yVal = 15.16; // Lifted slightly higher to prevent Z-fighting
+
+    // 1. Solid shoulder lines (left and right)
+    [-1, 1].forEach((side) => {
+      const lineOffset = rightOffset.clone().multiplyScalar(9.0 * side);
+      const linePos = center.clone().add(lineOffset);
+      list.push(
+        <mesh
+          key={`shoulder-line-${side}`}
+          position={[linePos.x, yVal, linePos.z]}
+          rotation={[0, angle, 0]}
+        >
+          <boxGeometry args={[0.3, 0.02, length]} />
+          <meshStandardMaterial color="#ffffff" roughness={0.5} />
+        </mesh>
+      );
+    });
+
+    // 2. Dashed lane dividers (to make it a 4-lane highway)
+    [-1, 1].forEach((side) => {
+      const dividerOffset = rightOffset.clone().multiplyScalar(4.5 * side);
+      const step = 25;
+      for (let d = 10; d < length - 10; d += step) {
+        const posOnPath = new THREE.Vector3().addScaledVector(normDir, d).add(start);
+        const segmentPos = posOnPath.clone().add(dividerOffset);
+        list.push(
+          <mesh
+            key={`dash-${side}-${d}`}
+            position={[segmentPos.x, yVal, segmentPos.z]}
+            rotation={[0, angle, 0]}
+          >
+            <boxGeometry args={[0.15, 0.02, 6]} />
+            <meshStandardMaterial color="#ffffff" roughness={0.5} />
+          </mesh>
+        );
+      }
+    });
+
+    // 3. Center line: Double yellow lines
+    [-1, 1].forEach((side) => {
+      const centerOffset = rightOffset.clone().multiplyScalar(0.25 * side);
+      const centerLinePos = center.clone().add(centerOffset);
+      list.push(
+        <mesh
+          key={`center-line-${side}`}
+          position={[centerLinePos.x, yVal, centerLinePos.z]}
+          rotation={[0, angle, 0]}
+        >
+          <boxGeometry args={[0.15, 0.02, length]} />
+          <meshStandardMaterial
+            color="#ffa116"
+            emissive="#ffa116"
+            emissiveIntensity={1.0}
+            toneMapped={false}
+          />
+        </mesh>
+      );
+    });
+
+    // 4. Guardrails (placed on top of the barrier walls)
+    [-1, 1].forEach((side) => {
+      const railOffset = rightOffset.clone().multiplyScalar(9.6 * side);
+      
+      // Vertical Posts
+      const postStep = 40;
+      for (let d = 5; d < length - 5; d += postStep) {
+        const posOnPath = new THREE.Vector3().addScaledVector(normDir, d).add(start);
+        const postPos = posOnPath.clone().add(railOffset);
+        
+        list.push(
+          <mesh
+            key={`guardpost-${side}-${d}`}
+            position={[postPos.x, 16.7, postPos.z]}
+            rotation={[0, angle, 0]}
+          >
+            <boxGeometry args={[0.3, 1.0, 0.3]} />
+            <meshStandardMaterial color="#7a7f85" roughness={0.5} metalness={0.8} />
+          </mesh>
+        );
+      }
+
+      // Horizontal Rails running the entire length (top and middle)
+      [16.6, 17.1].forEach((railY, rIdx) => {
+        const railPos = center.clone().add(railOffset);
+        list.push(
+          <mesh
+            key={`guardrail-${side}-${rIdx}`}
+            position={[railPos.x, railY, railPos.z]}
+            rotation={[0, angle, 0]}
+          >
+            <boxGeometry args={[0.2, 0.15, length]} />
+            <meshStandardMaterial 
+              color="#ffa116" 
+              emissive="#ffa116" 
+              emissiveIntensity={rIdx === 1 ? 0.6 : 0.1}
+              metalness={0.9} 
+              roughness={0.1} 
+              toneMapped={false}
+            />
+          </mesh>
+        );
+      });
+    });
+
+    return list;
+  }, [start, end, dir, length, angle, center]);
+
   // Midpoint signboard information
   const signboardPos = useMemo(() => {
     return center.clone().add({ x: 0, y: 32, z: 0 });
@@ -393,8 +505,8 @@ export function HighwayFlyover({ start: startCoords, end: endCoords, labelText }
         );
       })}
 
-      {/* Road Markings */}
-      <RoadMarkings start={start} end={end} y={15.15} />
+      {/* Road Markings and Guardrails */}
+      {roadLinesAndGuardrails}
 
       {/* Pillars and Streetlights */}
       {pillarsAndLamps.pillars}
