@@ -2399,13 +2399,20 @@ function ExplosionParticles({ position, isDrone = false, onComplete }: Explosion
   const meshRef = useRef<THREE.InstancedMesh>(null);
   const fireballRef = useRef<THREE.Mesh>(null);
   const lightRef = useRef<THREE.PointLight>(null);
-  const startTime = useRef(Date.now());
+  const startTime = useRef<number>(0);
   const particleCount = 30;
 
-  // Generate directions, scales, and custom colors for our 3D debris cubes
-  const [velocities, matrices, colors] = useMemo(() => {
+  const velocities = useRef<THREE.Vector3[]>([]);
+  const matrices = useRef<THREE.Matrix4[]>([]);
+  const baseScales = useRef<number[]>([]);
+  const colors = useRef<THREE.Color[]>([]);
+
+  useEffect(() => {
+    startTime.current = Date.now();
+
     const vels: THREE.Vector3[] = [];
     const mats: THREE.Matrix4[] = [];
+    const scales: number[] = [];
     const cols: THREE.Color[] = [];
     
     const palette = isDrone 
@@ -2413,7 +2420,6 @@ function ExplosionParticles({ position, isDrone = false, onComplete }: Explosion
       : ["#ffaa00", "#ff4400", "#ff1100", "#ffffff", "#444444"];
 
     for (let i = 0; i < particleCount; i++) {
-      // Burst outward uniformly
       const theta = Math.random() * Math.PI * 2;
       const phi = Math.acos((Math.random() * 2) - 1);
       const speed = 8 + Math.random() * 16;
@@ -2424,37 +2430,40 @@ function ExplosionParticles({ position, isDrone = false, onComplete }: Explosion
         Math.cos(phi) * speed
       ));
 
-      // Create a transformation matrix for each cube particle
       const matrix = new THREE.Matrix4();
-      const scale = 0.25 + Math.random() * 0.45; // Random particle size
+      const scale = 0.25 + Math.random() * 0.45;
       matrix.makeScale(scale, scale, scale);
       mats.push(matrix);
+      scales.push(scale);
 
       const colHex = palette[Math.floor(Math.random() * palette.length)];
       cols.push(new THREE.Color(colHex));
     }
-    return [vels, mats, cols];
-  }, [isDrone]);
 
-  // Set colors once on mount/update
-  useEffect(() => {
+    velocities.current = vels;
+    matrices.current = mats;
+    baseScales.current = scales;
+    colors.current = cols;
+
     if (meshRef.current) {
       for (let i = 0; i < particleCount; i++) {
-        meshRef.current.setColorAt(i, colors[i]);
+        meshRef.current.setColorAt(i, cols[i]);
       }
       meshRef.current.instanceColor!.needsUpdate = true;
     }
-  }, [colors]);
+  }, [isDrone]);
 
   useFrame((_, delta) => {
+    if (startTime.current === 0) return;
     const elapsed = Date.now() - startTime.current;
     const progress = Math.min(elapsed / 600, 1); // 600ms animation duration
 
     // 1. Update debris particles (move and shrink)
-    if (meshRef.current) {
+    if (meshRef.current && velocities.current.length > 0) {
       for (let i = 0; i < particleCount; i++) {
-        const mat = matrices[i];
-        const vel = velocities[i];
+        const mat = matrices.current[i];
+        const vel = velocities.current[i];
+        const baseScale = baseScales.current[i];
         
         // Extract position from matrix, add velocity, and update matrix
         const pos = new THREE.Vector3().setFromMatrixPosition(mat);
@@ -2465,7 +2474,7 @@ function ExplosionParticles({ position, isDrone = false, onComplete }: Explosion
         vel.multiplyScalar(0.98);
 
         // Rebuild the matrix with new position and shrinking scale
-        const currentScale = (0.25 + Math.random() * 0.45) * (1 - progress);
+        const currentScale = baseScale * (1 - progress);
         mat.makeTranslation(pos.x, pos.y, pos.z);
         mat.scale(new THREE.Vector3(currentScale, currentScale, currentScale));
         
