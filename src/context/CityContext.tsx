@@ -351,6 +351,18 @@ interface CityContextProps {
   endRabbitCinematic: () => void;
   handleEquipRelic: (relicId: string | null) => Promise<void>;
   handleLoadRetry: () => void;
+  transitState: {
+    active: boolean;
+    fromDistrict: string;
+    toDistrict: string;
+  } | null;
+  transitMenuOpen: boolean;
+  setTransitMenuOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  transitFrom: string | null;
+  setTransitFrom: React.Dispatch<React.SetStateAction<string | null>>;
+  handleBusArrival: (targetDistrict: string) => void;
+  handleOpenTransitMenu: (fromDistrict: string) => void;
+  handleSelectTransitDestination: (toDistrict: string) => void;
 }
 
 const CityContext = createContext<CityContextProps | undefined>(undefined);
@@ -1814,6 +1826,58 @@ export function CityProvider({ children }: { children: ReactNode }) {
     loadCity();
   }, [loadStage]);
 
+  const [transitState, setTransitState] = useState<{
+    active: boolean;
+    fromDistrict: string;
+    toDistrict: string;
+  } | null>(null);
+  const [transitMenuOpen, setTransitMenuOpen] = useState(false);
+  const [transitFrom, setTransitFrom] = useState<string | null>(null);
+
+  const handleBusArrival = useCallback((targetDistrict: string) => {
+    setTransitState(null);
+    setTransitMenuOpen(false);
+    const bld = buildings.find((b) => (b.district ?? "").toLowerCase() === targetDistrict.toLowerCase());
+    if (bld) {
+      setFocusedBuilding(bld.login);
+      setSelectedBuilding(bld);
+      if (!exploreMode) setExploreMode(true);
+    }
+  }, [buildings, exploreMode, setFocusedBuilding, setSelectedBuilding, setExploreMode]);
+
+  const handleOpenTransitMenu = useCallback((fromDistrict: string) => {
+    if (transitState?.active) return;
+    setTransitFrom(fromDistrict);
+    setTransitMenuOpen(true);
+  }, [transitState]);
+
+  const handleSelectTransitDestination = useCallback((toDistrict: string) => {
+    if (!transitFrom) return;
+    setTransitState({
+      active: true,
+      fromDistrict: transitFrom,
+      toDistrict,
+    });
+    setTransitMenuOpen(false);
+  }, [transitFrom]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      (window as any).__triggerTransit = (from: string, to: string) => {
+        setTransitState({
+          active: true,
+          fromDistrict: from,
+          toDistrict: to,
+        });
+      };
+    }
+    return () => {
+      if (typeof window !== "undefined") {
+        delete (window as any).__triggerTransit;
+      }
+    };
+  }, []);
+
   return (
     <CityContext.Provider
       value={{
@@ -2067,6 +2131,14 @@ export function CityProvider({ children }: { children: ReactNode }) {
         endRabbitCinematic,
         handleEquipRelic,
         handleLoadRetry,
+        transitState,
+        transitMenuOpen,
+        setTransitMenuOpen,
+        transitFrom,
+        setTransitFrom,
+        handleBusArrival,
+        handleOpenTransitMenu,
+        handleSelectTransitDestination,
       }}
     >
       {children}
