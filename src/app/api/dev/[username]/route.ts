@@ -281,6 +281,7 @@ export async function GET(
         b.problemsSolved - a.problemsSolved)[0].languageName
         : null;
       const litPercentage = Math.min(0.92, Math.max(0.15, activeDays / 365));
+      const badges = user.badges ?? [];
 
       let hash = 0;
       for (const ch of username) hash = (Math.imul(31, hash) + ch.charCodeAt(0)) | 0;
@@ -311,8 +312,8 @@ export async function GET(
         contests_attended: data.userContestRanking?.attendedContestsCount ?? 0,
         contest_top_percentage: data.userContestRanking?.topPercentage ?? null,
         contest_badge_name: data.userContestRanking?.badge?.name ?? null,
-        lc_badge: (user.badges?.length ?? 0) > 0 ? user.badges[user.badges.length - 1].name : null,
-        lc_badges_all: (user.badges ?? []).map((b: Badge) => ({ name: b.name, icon: b.icon, displayName: b.displayName })),
+        lc_badge: badges.length > 0 ? badges[badges.length - 1].name : null,
+        lc_badges_all: badges.map((b: Badge) => ({ name: b.name, icon: b.icon, displayName: b.displayName })),
         lc_bio: user.profile?.aboutMe ?? null,
         lc_country_code: user.profile?.countryName ?? null,
         lc_school: user.profile?.school ?? null,
