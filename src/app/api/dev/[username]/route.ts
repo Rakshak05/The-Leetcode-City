@@ -4,6 +4,11 @@ import { createServerSupabase } from "@/lib/supabase-server";
 
 export const dynamic = "force-dynamic";
 
+type LeetCodeYearCalendar = {
+  streak?: number;
+  totalActiveDays?: number;
+};
+
 type LeetCodeApiResponse = {
   data?: Record<string, unknown>;
   errors?: { message?: string }[];
@@ -108,7 +113,8 @@ async function fetchLeetCodeUser(username: string) {
       if (mu.yearCurrent) {
         (mu as Record<string, unknown>)[`y${currentYear}`] = mu.yearCurrent;
         if (!mu.userCalendar) {
-          mu.userCalendar = { streak: mu.yearCurrent.streak ?? 0, totalActiveDays: mu.yearCurrent.totalActiveDays ?? 0 };
+          const yearCurrent = mu.yearCurrent as LeetCodeYearCalendar;
+          mu.userCalendar = { streak: yearCurrent.streak ?? 0, totalActiveDays: yearCurrent.totalActiveDays ?? 0 };
         }
       }
       if (mu.yearPrev) (mu as Record<string, unknown>)[`y${prevYear}`] = mu.yearPrev;
