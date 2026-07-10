@@ -8,6 +8,7 @@ interface LeetCodeProfile {
   realName?: string;
   userAvatar?: string;
   reputation?: number;
+  ranking?: number;
   aboutMe?: string;
   countryName?: string;
   school?: string;
@@ -40,6 +41,7 @@ interface LeetCodeMatchedUser {
   };
   userCalendar?: LeetCodeYearCalendar;
   maxStreak?: number;
+  languageProblemCount?: { languageName: string; problemsSolved: number }[];
   badges?: { name: string; icon: string; displayName: string }[];
   tagProblemCounts?: {
     advanced?: { tagName: string; problemsSolved: number }[];
