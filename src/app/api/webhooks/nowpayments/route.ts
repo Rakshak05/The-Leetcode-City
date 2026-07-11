@@ -178,10 +178,11 @@ export async function POST(request: Request) {
       case "failed":
       case "refunded": {
         const newStatus = paymentStatus === "refunded" ? "refunded" : "expired";
+        const txIds = [orderId, paymentId].filter(Boolean) as string[];
         await sb
           .from("purchases")
           .update({ status: newStatus })
-          .eq("provider_tx_id", orderId)
+          .in("provider_tx_id", txIds)
           .in("status", ["pending", "completed", "delivered", "processing"])
           .eq("provider", "nowpayments");
         break;
