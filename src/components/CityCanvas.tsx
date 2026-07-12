@@ -2934,12 +2934,15 @@ export default function CityCanvas({
           )}
 
           {/* Render Bridge Gates at the main central bridge entrances to split the layout */}
-          {river && (
-            <>
-              <BridgeGate position={[0, 0, 80]} />
-              <BridgeGate position={[0, 0, -80]} />
-            </>
-          )}
+          {river && bridges && bridges[0] && (() => {
+            const [bx, , bz] = bridges[0].position;
+            return (
+              <>
+                <BridgeGate position={[bx, 0, bz + 80]} />
+                <BridgeGate position={[bx, 0, bz - 80]} />
+              </>
+            );
+          })()}
 
           <CityScene
             buildings={buildings}
