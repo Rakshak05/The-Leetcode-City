@@ -226,6 +226,7 @@ export default function SearchBar() {
     ghostPreviewShownRef,
     setGhostPreviewLogin,
     setExploreMode,
+    exploreMode,
   } = useCity();
 
   const searchUser = async () => {
@@ -386,11 +387,11 @@ export default function SearchBar() {
     searchUser();
   };
 
-  if (compareBuilding || comparePair) return null;
+  if (!exploreMode || compareBuilding || comparePair) return null;
 
   return (
     <div className="pointer-events-auto absolute top-3 left-32 right-3 z-[31] sm:left-36 sm:right-auto sm:top-4 sm:w-72">
-      <form onSubmit={handleSubmit} className="flex items-center gap-2">
+      <form id="search-bar-form" onSubmit={handleSubmit} className="flex items-center gap-2">
         <input
           type="text"
           value={username}

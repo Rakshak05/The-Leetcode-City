@@ -12,6 +12,7 @@ import LevelUpToast from "@/components/LevelUpToast";
 import XpBar from "@/components/XpBar";
 import { useCity } from "@/context/CityContext";
 import MiniLeaderboard from "./MiniLeaderboard";
+import { SearchFeedback } from "./SearchBar";
 import { ITEM_NAMES } from "@/lib/zones";
 
 // Feature flags
@@ -105,6 +106,10 @@ export default function CityHUD() {
     effectiveLiveCount,
     setFocusedBuilding,
     setSelectedBuilding,
+    username,
+    feedback,
+    setFeedback,
+    loading,
   } = useCity();
 
   // Search input specifically for the landing page
@@ -114,8 +119,14 @@ export default function CityHUD() {
     e.preventDefault();
     if (!landingSearchInput.trim()) return;
     setUsername(landingSearchInput);
-    // In page.tsx/SearchBar.tsx, the query handles fetching. Let's delegate search user directly:
-    // But since they share context state, searchUser handles username state.
+    
+    // Trigger submit on the SearchBar form
+    setTimeout(() => {
+      const searchForm = document.querySelector("#search-bar-form") as HTMLFormElement;
+      if (searchForm) {
+        searchForm.requestSubmit();
+      }
+    }, 0);
   };
 
   const isMobile = typeof window !== "undefined" ? window.innerWidth < 640 || "ontouchstart" in window : false;
@@ -273,8 +284,131 @@ export default function CityHUD() {
                   );
                 }
               })()}
+
+              {/* Search Input Form */}
+              <form
+                onSubmit={handleLandingSubmit}
+                className="flex w-full max-w-md items-center gap-2 mt-4"
+              >
+                <input
+                  type="text"
+                  value={landingSearchInput}
+                  onChange={(e) => {
+                    setLandingSearchInput(e.target.value);
+                    if (feedback?.type === "error") setFeedback(null);
+                  }}
+                  placeholder={session ? "search any LeetCode username" : "type your LeetCode username"}
+                  className="min-w-0 flex-1 border-[3px] border-border bg-bg-raised px-3 py-2 text-base sm:text-xs text-cream outline-none backdrop-blur-sm transition-colors placeholder:text-dim sm:px-4 sm:py-2.5"
+                  onFocus={(e) => (e.currentTarget.style.borderColor = theme.accent)}
+                  onBlur={(e) => (e.currentTarget.style.borderColor = "")}
+                />
+                <button
+                  type="submit"
+                  disabled={loading || !landingSearchInput.trim()}
+                  className="btn-press flex-shrink-0 px-4 py-2 text-xs text-bg disabled:opacity-40 sm:px-5 sm:py-2.5"
+                  style={{
+                    backgroundColor: theme.accent,
+                    boxShadow: `4px 4px 0 0 ${theme.shadow}`,
+                  }}
+                >
+                  {loading ? <span className="blink-dot inline-block">_</span> : "Search"}
+                </button>
+              </form>
+
+              {/* Search Feedback */}
+              <div className="w-full max-w-md">
+                <SearchFeedback
+                  feedback={feedback}
+                  accentColor={theme.accent}
+                  onDismiss={() => setFeedback(null)}
+                  onRetry={() => {
+                    window.dispatchEvent(new CustomEvent("leetcodecity:search"));
+                  }}
+                />
+              </div>
             </div>
           </div>
+
+          {/* Center - Explore buttons + Shop + Auth */}
+          {buildings.length > 0 && (
+            <div className="pointer-events-auto flex flex-col items-center gap-2 sm:gap-3">
+              {/* Free Gift CTA — above primary actions */}
+              {hasFreeGift && (
+                <button
+                  onClick={handleClaimFreeGift}
+                  disabled={claimingGift}
+                  className="gift-cta btn-press px-7 py-3 text-xs sm:py-3.5 sm:text-sm text-bg disabled:opacity-60"
+                  style={{
+                    backgroundColor: theme.accent,
+                    boxShadow: `2px 2px 0 0 ${theme.shadow}`,
+                  }}
+                >
+                  {claimingGift ? "Opening..." : "🎁 Open Free Gift!"}
+                </button>
+              )}
+
+              {/* Primary actions */}
+              <div className="flex items-center gap-3 sm:gap-4">
+                <button
+                  onClick={() => setExploreMode(true)}
+                  className="btn-press px-7 py-3 text-xs sm:py-3.5 sm:text-sm text-bg"
+                  style={{
+                    backgroundColor: theme.accent,
+                    boxShadow: `4px 4px 0 0 ${theme.shadow}`,
+                  }}
+                >
+                  Explore City
+                  <span className="block text-[8px] opacity-60 normal-case">Browse Buildings</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setEArcadeOpen(true);
+                  }}
+                  className="btn-press px-7 py-3 text-xs sm:py-3.5 sm:text-sm text-bg"
+                  style={{
+                    backgroundColor: theme.accent,
+                    boxShadow: `4px 4px 0 0 ${theme.shadow}`,
+                  }}
+                >
+                  Arcade
+                  <span className="block text-[8px] opacity-60 normal-case">
+                    {arcadeOnline > 0 ? `${arcadeOnline} online` : "Play mini-games"}
+                  </span>
+                </button>
+                <div className="relative">
+                  <button
+                    onClick={() => {
+                      setFocusedBuilding(null);
+                      setFlyMode(true);
+                      setFlyScore({ score: 0, earned: 0, combo: 0, collected: 0, maxCombo: 1 });
+                      flyStartTime.current = Date.now();
+                      flyPausedAt.current = 0;
+                      flyTotalPauseMs.current = 0;
+                      setFlyElapsedSec(0);
+                      try {
+                        setFlyPersonalBest(
+                          parseInt(localStorage.getItem("leetcodecity_fly_pb") || "0", 10) || 0
+                        );
+                      } catch {
+                        setFlyPersonalBest(0);
+                      }
+                      if (!localStorage.getItem("leetcodecity_fly_controls_seen")) {
+                        setShowFlyControls(true);
+                      }
+                    }}
+                    className="btn-press px-7 py-3 text-xs sm:py-3.5 sm:text-sm text-bg"
+                    style={{
+                      backgroundColor: theme.accent,
+                      boxShadow: `4px 4px 0 0 ${theme.shadow}`,
+                    }}
+                  >
+                    ✈ Fly
+                    <span className="block text-[8px] opacity-60 normal-case">Collect PX</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Bottom stats and scoreboard */}
           <div className="pointer-events-auto flex w-full items-end justify-end">
