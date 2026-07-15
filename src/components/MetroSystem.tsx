@@ -3,7 +3,7 @@
 import React, { useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
-import { DISTRICT_ORIGINS } from "@/lib/github";
+import type { CityBuilding } from "@/lib/github";
 
 interface TrackSegment {
   start: THREE.Vector3;
@@ -109,30 +109,26 @@ function MetroTrain({ segment, speedMultiplier = 1.0 }: TrainProps) {
   useFrame(({ clock }) => {
     if (!trainRef.current) return;
     
-    // Train cycle loop: speed up, glide, slow down at station
     const time = clock.getElapsedTime() * 0.08 * speedMultiplier;
-    // We want the t parameter to pause at 0 and 1 representing the stations
-    const progress = (Math.sin(time * Math.PI - Math.PI / 2) + 1) / 2; // Smooth sine ramp 0 -> 1 -> 0
+    const progress = (Math.sin(time * Math.PI - Math.PI / 2) + 1) / 2;
     
     const trainPos = new THREE.Vector3().addScaledVector(normDir, progress * length).add(segment.start);
     trainRef.current.position.copy(trainPos);
     
-    // Smooth coach bobbing
     const bob = Math.sin(clock.getElapsedTime() * 8) * 0.15;
     trainRef.current.position.y = segment.start.y + bob;
   });
 
-  // Render 3 coaches connected to each other
   return (
     <group ref={trainRef} rotation={[0, angle, 0]}>
       {[-24, 0, 24].map((offsetZ) => (
         <group key={offsetZ} position={[0, 2.5, offsetZ]}>
-          {/* Coach Body (Silver grey metallic) */}
+          {/* Coach Body */}
           <mesh>
             <boxGeometry args={[6.5, 5, 22]} />
             <meshStandardMaterial color="#a0a5ad" metalness={0.85} roughness={0.2} />
           </mesh>
-          {/* Window bands (Black glass + neon yellow lit) */}
+          {/* Window bands */}
           {[-8, -4, 0, 4, 8].map((wZ) => (
             [-1.1, 1.1].map((side) => (
               <group key={`win-${wZ}-${side}`} position={[3.3 * side, 1.2, wZ]}>
@@ -143,15 +139,14 @@ function MetroTrain({ segment, speedMultiplier = 1.0 }: TrainProps) {
               </group>
             ))
           ))}
-          {/* Orange streak details */}
+          {/* Orange streak */}
           <mesh position={[0, -1.2, 0]}>
             <boxGeometry args={[6.7, 0.4, 22.2]} />
             <meshStandardMaterial color="#ffa116" emissive="#ffa116" emissiveIntensity={1.5} toneMapped={false} />
           </mesh>
         </group>
       ))}
-      
-      {/* Front Headlight (on lead coach depending on direction of travel) */}
+      {/* Headlight */}
       <mesh position={[0, 2.2, 37]}>
         <sphereGeometry args={[0.8, 8, 6]} />
         <meshStandardMaterial color="#fff" emissive="#fff" emissiveIntensity={4} toneMapped={false} />
@@ -161,33 +156,49 @@ function MetroTrain({ segment, speedMultiplier = 1.0 }: TrainProps) {
 }
 
 // ─── Main Elevated Track & Pillars Assembly ───────────────────────
-export default function MetroSystem() {
-  const o = DISTRICT_ORIGINS;
+// Phase 3: Stations are placed OUTSIDE the city boundary, connected
+// by elevated tracks that cross over water.
+export default function MetroSystem({ buildings }: { buildings?: CityBuilding[] }) {
+  // Compute city extents from actual building positions
+  const cityExtent = useMemo(() => {
+    if (!buildings || buildings.length === 0) return { maxX: 500, maxZ: 500 };
+    let maxX = 0, maxZ = 0;
+    for (const b of buildings) {
+      maxX = Math.max(maxX, Math.abs(b.position[0]) + b.width / 2);
+      maxZ = Math.max(maxZ, Math.abs(b.position[2]) + b.depth / 2);
+    }
+    return { maxX, maxZ };
+  }, [buildings]);
 
-  // Define elevated track paths (Y=40)
+  // Station positions: placed outside the city at cardinal points
+  const stationOffset = 200; // How far beyond city edge
+  const stationPositions = useMemo(() => ({
+    north: [0, 0, -(cityExtent.maxZ + stationOffset)] as [number, number, number],
+    south: [0, 0, (cityExtent.maxZ + stationOffset)] as [number, number, number],
+    east:  [(cityExtent.maxX + stationOffset), 0, 0] as [number, number, number],
+    west:  [-(cityExtent.maxX + stationOffset), 0, 0] as [number, number, number],
+  }), [cityExtent, stationOffset]);
+
+  // Define elevated track paths (Y=40) connecting stations through the city
   const trackSegments = useMemo<TrackSegment[]>(() => {
     const list: TrackSegment[] = [];
 
-    // Track 1: Downtown (Bengaluru) [0, 40, 0] to Delhi (fullstack) [0, 40, -4000]
-    if (o.downtown && o.fullstack) {
-      list.push({
-        start: new THREE.Vector3(o.downtown[0], 40, o.downtown[2]),
-        end: new THREE.Vector3(o.fullstack[0], 40, o.fullstack[2]),
-        name: "bengaluru-delhi"
-      });
-    }
+    // North-South line (through city center)
+    list.push({
+      start: new THREE.Vector3(stationPositions.north[0], 40, stationPositions.north[2]),
+      end: new THREE.Vector3(stationPositions.south[0], 40, stationPositions.south[2]),
+      name: "north-south-line"
+    });
 
-    // Track 2: Delhi (fullstack) [0, 40, -4000] to Kolkata (devops) [-3500, 40, -4000]
-    if (o.fullstack && o.devops) {
-      list.push({
-        start: new THREE.Vector3(o.fullstack[0], 40, o.fullstack[2]),
-        end: new THREE.Vector3(o.devops[0], 40, o.devops[2]),
-        name: "delhi-kolkata"
-      });
-    }
+    // East-West line (through city center)
+    list.push({
+      start: new THREE.Vector3(stationPositions.east[0], 40, stationPositions.east[2]),
+      end: new THREE.Vector3(stationPositions.west[0], 40, stationPositions.west[2]),
+      name: "east-west-line"
+    });
 
     return list;
-  }, [o]);
+  }, [stationPositions]);
 
   const railsAndPillars = useMemo(() => {
     const pillars: React.ReactNode[] = [];
@@ -201,7 +212,7 @@ export default function MetroSystem() {
       const angle = Math.atan2(dir.x, dir.z);
       const center = new THREE.Vector3().addVectors(segment.start, segment.end).multiplyScalar(0.5);
 
-      // Track beams structure
+      // Track beams
       rails.push(
         <group key={`track-${segment.name}`} position={[center.x, 39.5, center.z]} rotation={[0, angle, 0]}>
           {/* Main viaduct bed */}
@@ -209,12 +220,12 @@ export default function MetroSystem() {
             <boxGeometry args={[14, 1.2, length]} />
             <meshStandardMaterial color="#50525c" roughness={0.8} />
           </mesh>
-          {/* Left Rail line */}
+          {/* Left Rail */}
           <mesh position={[-3.5, 1.0, 0]}>
             <boxGeometry args={[0.5, 0.4, length]} />
             <meshStandardMaterial color="#ffa116" emissive="#ffa116" emissiveIntensity={1.0} toneMapped={false} />
           </mesh>
-          {/* Right Rail line */}
+          {/* Right Rail */}
           <mesh position={[3.5, 1.0, 0]}>
             <boxGeometry args={[0.5, 0.4, length]} />
             <meshStandardMaterial color="#ffa116" emissive="#ffa116" emissiveIntensity={1.0} toneMapped={false} />
@@ -227,12 +238,10 @@ export default function MetroSystem() {
         const pos = new THREE.Vector3().addScaledVector(normDir, d).add(segment.start);
         pillars.push(
           <group key={`metro-pill-${segment.name}-${d}`}>
-            {/* Main support column */}
             <mesh position={[pos.x, 20, pos.z]}>
               <cylinderGeometry args={[2.8, 3.8, 40, 6]} />
               <meshStandardMaterial color="#42454f" roughness={0.85} />
             </mesh>
-            {/* T-bar lintel supporting the tracks */}
             <mesh position={[pos.x, 39, pos.z]} rotation={[0, angle, 0]}>
               <boxGeometry args={[16, 2, 4.5]} />
               <meshStandardMaterial color="#32353d" roughness={0.9} />
@@ -251,12 +260,13 @@ export default function MetroSystem() {
       {railsAndPillars.rails}
       {railsAndPillars.pillars}
 
-      {/* Stations */}
-      {o.downtown && <MetroStation position={[o.downtown[0], 0, o.downtown[2]]} name="BENGALURU CENTRAL" />}
-      {o.fullstack && <MetroStation position={[o.fullstack[0], 0, o.fullstack[2]]} name="DELHI JUNCTION" />}
-      {o.devops && <MetroStation position={[o.devops[0], 0, o.devops[2]]} name="KOLKATA TERMINUS" />}
+      {/* Stations at cardinal points outside the city */}
+      <MetroStation position={stationPositions.north} name="NORTH TERMINAL" />
+      <MetroStation position={stationPositions.south} name="SOUTH TERMINAL" />
+      <MetroStation position={stationPositions.east} name="EAST TERMINAL" />
+      <MetroStation position={stationPositions.west} name="WEST TERMINAL" />
 
-      {/* Animated Metro Trains running on the track segments */}
+      {/* Animated Metro Trains */}
       {trackSegments.map((seg, idx) => (
         <MetroTrain key={`train-${idx}`} segment={seg} speedMultiplier={idx % 2 === 0 ? 1.0 : 1.2} />
       ))}
