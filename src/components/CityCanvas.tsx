@@ -8,7 +8,7 @@ import * as THREE from "three";
 import CityScene from "./CityScene";
 import type { FocusInfo } from "./CityScene";
 import type { LiveSession } from "@/lib/useCodingPresence";
-import type { CityBuilding, CityPlaza, CityDecoration } from "@/lib/github";
+import type { CityBuilding, CityPlaza, CityDecoration, CityRiver, CityBridge, CityCanal } from "@/lib/github";
 import SkyAds from "./SkyAds";
 import BuildingAds from "./BuildingAds";
 import type { SkyAd } from "@/lib/skyAds";
@@ -39,10 +39,15 @@ import WhiteRabbit from "./WhiteRabbit";
 import CelebrationEffect from "./CelebrationEffect";
 import WallpaperParallax from "./WallpaperParallax";
 
+import BusTransit from "./BusTransit";
+import InterCityConnections from "./InterCityConnections";
+import MetroSystem from "./MetroSystem";
+import TramSystem from "./TramSystem";
 import AtmosphereCycleManager from "./AtmosphereCycleManager";
 import { useWeather } from '@/context/WeatherContext';
 import { RainParticles } from './weather/RainParticles';
 import { RainRippleGround } from './weather/RainRippleGround';
+import CodeForgeModal from "@/components/CodeForgeModal";
 
 
 // ─── Theme Definitions ───────────────────────────────────────
@@ -201,31 +206,30 @@ useGLTF.preload("/models/paper-plane.glb");
 
 const INTRO_DURATION = 14; // seconds
 
-// Founder building sits at roughly (146, h, -66) in the first block.
-// Camera target: founder building top.
-const FOUNDER_X = 146;
-const FOUNDER_Z = -66;
+// Camera target: downtown city center.
+const FOUNDER_X = 500;
+const FOUNDER_Z = 650;
 const TARGET_X = FOUNDER_X;
 const TARGET_Z = FOUNDER_Z;
-const TARGET_Y = 450;
+const TARGET_Y = 150;
 
-// Arc sweep: camera arcs ~180° around the city
-// Far left in fog -> descends through buildings -> rises to wide panorama centered on founder
+// Arc sweep: camera arcs ~180° around the downtown city
+// Far left in fog -> descends through buildings -> rises to wide panorama centered on downtown
 const INTRO_WAYPOINTS: [number, number, number][] = [
-  [-1600, 800, 1800],   // WP0: Far, high, left - city hidden in fog
-  [-1000, 700, 1300],   // WP1: Descending, silhouette appears
-  [-600, 600, 900],    // WP2: Ad plane level, buildings becoming clear
-  [-200, 550, 650],    // WP3: Skirting the city edge
-  [200, 600, 600],    // WP4: Crossing over
-  [500, 700, 700],    // WP5: Rising, pulling back
-  [700, 800, 900],    // WP6: Dramatic pullback
-  [800, 850, 1000],   // WP7: Final orbit position (wide panorama)
+  [-1250, 800, 2500],   // WP0: Far, high, left - city hidden in fog
+  [-650, 700, 2000],    // WP1: Descending, silhouette appears
+  [-250, 600, 1600],    // WP2: Ad plane level, buildings becoming clear
+  [150, 550, 1350],     // WP3: Skirting the city edge
+  [550, 600, 1300],     // WP4: Crossing over
+  [850, 700, 1400],     // WP5: Rising, pulling back
+  [1050, 800, 1600],    // WP6: Dramatic pullback
+  [1300, 700, 1500],    // WP7: Final orbit position (wide panorama)
 ];
 
-// Look targets smoothly converge toward the founder building top
+// Look targets smoothly converge toward the downtown city center
 const INTRO_LOOK_TARGETS: [number, number, number][] = [
-  [100, 300, -200],      // WP0: Toward distant city, already high
-  [TARGET_X, 380, TARGET_Z],  // WP1: Rising toward founder top
+  [300, 150, 150],      // WP0: Toward distant city, already high
+  [TARGET_X, 100, TARGET_Z],  // WP1: Rising toward city center
   [TARGET_X, TARGET_Y, TARGET_Z],  // WP2: Locking on
   [TARGET_X, TARGET_Y, TARGET_Z],  // WP3: Holding
   [TARGET_X, TARGET_Y, TARGET_Z],  // WP4: Holding
@@ -385,12 +389,14 @@ function CameraFocus({
   focusedBuilding,
   focusedBuildingB,
   relicFocus,
+  isNewBuilding,
   controlsRef,
 }: {
   buildings: CityBuilding[];
   focusedBuilding: string | null;
   focusedBuildingB?: string | null;
   relicFocus?: { x: number; y: number; z: number } | null;
+  isNewBuilding?: boolean;
   controlsRef: React.RefObject<any>;
 }) {
   const { camera } = useThree();
@@ -403,7 +409,10 @@ function CameraFocus({
 
   // Use ref for buildings to avoid re-triggering animation on array changes
   const buildingsRef = useRef(buildings);
-  buildingsRef.current = buildings;
+  
+  useEffect(() => {
+    buildingsRef.current = buildings;
+  }, [buildings]);
 
   useEffect(() => {
     if (relicFocus) {
@@ -486,8 +495,8 @@ function CameraFocus({
       // and pull camera further back to show more of the building
       const isMobile = window.innerWidth < 640;
       const mobileOffset = isMobile ? 60 : 0;
-      const dist = isMobile ? 250 : 80;
-      const camHeight = isMobile ? 160 : 60;
+      const dist = isNewBuilding ? (isMobile ? 150 : 35) : (isMobile ? 250 : 80);
+      const camHeight = isNewBuilding ? (isMobile ? 100 : 25) : (isMobile ? 160 : 60);
       endPos.current.set(
         bA.position[0] + dist,
         bA.height + camHeight,
@@ -507,7 +516,7 @@ function CameraFocus({
       controlsRef.current.autoRotate = false;
     }
      
-  }, [focusedBuilding, focusedBuildingB, relicFocus, camera, controlsRef]);
+  }, [focusedBuilding, focusedBuildingB, relicFocus, camera, controlsRef, isNewBuilding]);
 
   useFrame((_, delta) => {
     if (!active.current || progress.current >= 1) return;
@@ -1181,11 +1190,25 @@ function CameraReset() {
 function Ground({ color, grid1, grid2 }: { color: string; grid1: string; grid2: string }) {
   return (
     <group>
+      {/* City ground — compact island */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -1, 0]}>
-        <planeGeometry args={[20000, 20000]} />
+        <planeGeometry args={[6000, 6000]} />
         <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.15} roughness={0.95} />
       </mesh>
       <gridHelper args={[4000, 200, grid1, grid2]} position={[0, -0.5, 0]} />
+      {/* Ocean — flat infinite water plane surrounding the city */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -2, 0]} renderOrder={-1}>
+        <planeGeometry args={[80000, 80000]} />
+        <meshStandardMaterial
+          color="#0a2a4a"
+          emissive="#0a3060"
+          emissiveIntensity={0.4}
+          roughness={0.3}
+          metalness={0.2}
+          transparent
+          opacity={0.92}
+        />
+      </mesh>
     </group>
   );
 }
@@ -1308,6 +1331,467 @@ function Sidewalk({ position, size, color }: { position: [number, number, number
   );
 }
 
+// Gigantic Bridge Gate with road passing under it, distributing the layouts
+function BridgeGate({ position }: { position: [number, number, number] }) {
+  return (
+    <group position={position}>
+      {/* Pillars on each side of the road */}
+      <mesh position={[-16, 20, 0]}>
+        <boxGeometry args={[5, 40, 5]} />
+        <meshStandardMaterial color="#c0a870" emissive="#3b2b1a" roughness={0.3} />
+      </mesh>
+      <mesh position={[16, 20, 0]}>
+        <boxGeometry args={[5, 40, 5]} />
+        <meshStandardMaterial color="#c0a870" emissive="#3b2b1a" roughness={0.3} />
+      </mesh>
+      
+      {/* Arch top beam */}
+      <mesh position={[0, 42, 0]}>
+        <boxGeometry args={[37, 4, 7]} />
+        <meshStandardMaterial color="#b89860" emissive="#4b3b2a" roughness={0.25} />
+      </mesh>
+      
+      {/* Decorative center crest */}
+      <mesh position={[0, 45, 0]}>
+        <boxGeometry args={[16, 2, 4]} />
+        <meshStandardMaterial color="#a08850" />
+      </mesh>
+      <mesh position={[0, 47, 0]}>
+        <sphereGeometry args={[2.5, 12, 10]} />
+        <meshStandardMaterial color="#ffa116" emissive="#ffa116" emissiveIntensity={2.5} toneMapped={false} />
+      </mesh>
+      
+      {/* Glowing tech banners on the pillars */}
+      <mesh position={[-16, 20, 2.6]}>
+        <boxGeometry args={[3, 25, 0.2]} />
+        <meshStandardMaterial color="#ffa116" emissive="#ffa116" emissiveIntensity={1.2} toneMapped={false} />
+      </mesh>
+      <mesh position={[16, 20, 2.6]}>
+        <boxGeometry args={[3, 25, 0.2]} />
+        <meshStandardMaterial color="#ffa116" emissive="#ffa116" emissiveIntensity={1.2} toneMapped={false} />
+      </mesh>
+
+      {/* Main welcome sign on the arch beam */}
+      <mesh position={[0, 42, 3.6]}>
+        <boxGeometry args={[26, 2.2, 0.2]} />
+        <meshStandardMaterial color="#00ffcc" emissive="#00ffcc" emissiveIntensity={2.0} toneMapped={false} />
+      </mesh>
+    </group>
+  );
+}
+
+// Auto-rickshaw: iconic yellow-green three-wheeler
+function AutoRickshaw({ position, rotation }: { position: [number, number, number]; rotation: number }) {
+  return (
+    <group position={position} rotation={[0, rotation, 0]}>
+      {/* Body */}
+      <mesh position={[0, 1.8, 0]}>
+        <boxGeometry args={[4, 2.8, 3]} />
+        <meshStandardMaterial color="#2a8a2a" emissive="#2a8a2a" emissiveIntensity={0.35} />
+      </mesh>
+      {/* Roof */}
+      <mesh position={[0, 3.6, 0]}>
+        <boxGeometry args={[4.2, 0.4, 3.2]} />
+        <meshStandardMaterial color="#e8c820" emissive="#e8c820" emissiveIntensity={0.5} />
+      </mesh>
+      {/* Front wheel */}
+      <mesh position={[2.2, 0.5, 0]} rotation={[Math.PI / 2, 0, 0]}>
+        <cylinderGeometry args={[0.5, 0.5, 0.4, 8]} />
+        <meshStandardMaterial color="#222" emissive="#222" emissiveIntensity={0.2} />
+      </mesh>
+      {/* Rear wheels */}
+      <mesh position={[-1.5, 0.5, 1.6]} rotation={[Math.PI / 2, 0, 0]}>
+        <cylinderGeometry args={[0.5, 0.5, 0.4, 8]} />
+        <meshStandardMaterial color="#222" emissive="#222" emissiveIntensity={0.2} />
+      </mesh>
+      <mesh position={[-1.5, 0.5, -1.6]} rotation={[Math.PI / 2, 0, 0]}>
+        <cylinderGeometry args={[0.5, 0.5, 0.4, 8]} />
+        <meshStandardMaterial color="#222" emissive="#222" emissiveIntensity={0.2} />
+      </mesh>
+      {/* Headlight */}
+      <mesh position={[2.3, 2.2, 0]}>
+        <boxGeometry args={[0.3, 0.6, 0.6]} />
+        <meshStandardMaterial color="#f0d870" emissive="#f0d870" emissiveIntensity={1.5} toneMapped={false} />
+      </mesh>
+    </group>
+  );
+}
+
+
+// ─── River, Waterfront and Bridge Rendering ──────────────────
+
+function River({ river, waterColor, waterEmissive }: { river: CityRiver; waterColor: string; waterEmissive: string }) {
+  const matRef = useRef<THREE.MeshBasicMaterial>(null);
+
+  useFrame(({ clock }) => {
+    if (matRef.current) {
+      matRef.current.opacity = 0.82 + Math.sin(clock.elapsedTime * 0.5) * 0.05;
+    }
+  });
+
+  return (
+    <mesh
+      rotation={[-Math.PI / 2, 0, 0]}
+      position={[river.x + river.width / 2, 0.5, river.centerZ]}
+      renderOrder={1}
+    >
+      <planeGeometry args={[river.width, river.length]} />
+      <meshBasicMaterial
+        ref={matRef}
+        color={waterEmissive}
+        transparent
+        opacity={0.82}
+        depthWrite={false}
+      />
+    </mesh>
+  );
+}
+
+function CityCanals({ canals, waterColor, waterEmissive }: { canals: CityCanal[]; waterColor: string; waterEmissive: string }) {
+  const matsRef = useRef<THREE.MeshBasicMaterial[]>([]);
+
+  useFrame(({ clock }) => {
+    const opacity = 0.72 + Math.sin(clock.elapsedTime * 0.6) * 0.06;
+    for (const mat of matsRef.current) {
+      mat.opacity = opacity;
+    }
+  });
+
+  if (canals.length === 0) return null;
+
+  return (
+    <>
+      {canals.map((canal, i) => (
+        <mesh
+          key={`canal-${i}`}
+          rotation={[-Math.PI / 2, 0, canal.rotation]}
+          position={canal.position}
+          renderOrder={1}
+        >
+          <planeGeometry args={[canal.length, canal.width]} />
+          <meshBasicMaterial
+            ref={(el: THREE.MeshBasicMaterial | null) => {
+              if (el) {
+                if (!matsRef.current.includes(el)) matsRef.current.push(el);
+              }
+            }}
+            color={waterEmissive}
+            transparent
+            opacity={0.72}
+            depthWrite={false}
+          />
+        </mesh>
+      ))}
+    </>
+  );
+}
+
+function RiverText({ river }: { river: CityRiver }) {
+  const [fontReady, setFontReady] = useState(false);
+  const texRef = useRef<THREE.CanvasTexture | null>(null);
+
+  useEffect(() => {
+    document.fonts.ready.then(() => setFontReady(true));
+  }, []);
+
+  const texture = useMemo(() => {
+    if (!fontReady) return null;
+
+    const cW = 256;
+    const cH = 4096;
+    const c = document.createElement("canvas");
+    c.width = cW;
+    c.height = cH;
+    const ctx = c.getContext("2d")!;
+    ctx.clearRect(0, 0, cW, cH);
+
+    ctx.save();
+    ctx.translate(cW / 2, cH / 2);
+    ctx.rotate(-Math.PI / 2);
+
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+
+    ctx.fillStyle = "rgba(255,255,255,0.4)";
+    ctx.font = 'bold 100px "Silkscreen", monospace';
+    ctx.fillText("leetcode.city", 0, 0);
+
+    ctx.restore();
+
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    texRef.current = tex;
+    return tex;
+  }, [fontReady]);
+
+  useEffect(() => {
+    return () => { texRef.current?.dispose(); };
+  }, []);
+
+  if (!texture) return null;
+
+  return (
+    <mesh
+      position={[river.x + river.width / 2, 0.6, river.centerZ]}
+      rotation={[-Math.PI / 2, 0, 0]}
+      renderOrder={2}
+    >
+      <planeGeometry args={[river.width, river.length]} />
+      <meshBasicMaterial
+        map={texture}
+        transparent
+        depthWrite={false}
+      />
+    </mesh>
+  );
+}
+
+function Waterfront({ river, dockColor }: { river: CityRiver; dockColor: string }) {
+  const dockPlankRef = useRef<THREE.InstancedMesh>(null);
+  const bollardRef = useRef<THREE.InstancedMesh>(null);
+
+  const dockSpacing = 35;
+  const dockCount = 60; // 30 per side
+  const bollardsPerDock = 2;
+  const totalBollards = dockCount * bollardsPerDock;
+
+  const geos = useMemo(() => ({
+    plank: new THREE.BoxGeometry(8, 0.3, 4),
+    bollard: new THREE.CylinderGeometry(0.5, 0.5, 2, 8),
+  }), []);
+
+  const mats = useMemo(() => ({
+    plank: new THREE.MeshStandardMaterial({ color: dockColor, emissive: dockColor, emissiveIntensity: 0.35 }),
+    bollard: new THREE.MeshStandardMaterial({ color: "#808080", emissive: "#606060", emissiveIntensity: 0.3 }),
+  }), [dockColor]);
+
+  useEffect(() => {
+    if (!dockPlankRef.current || !bollardRef.current) return;
+    const leftX = river.x - 6; // left bank
+    const rightX = river.x + river.width + 6; // right bank
+    const halfRange = (dockCount / 2) * dockSpacing / 2;
+    let di = 0;
+    let bi = 0;
+    const q = new THREE.Quaternion();
+    const s = new THREE.Vector3(1, 1, 1);
+    const p = new THREE.Vector3();
+    const m = new THREE.Matrix4();
+
+    for (let side = 0; side < 2; side++) {
+      const x = side === 0 ? leftX : rightX;
+      for (let i = 0; i < dockCount / 2; i++) {
+        const z = -halfRange + i * dockSpacing;
+        p.set(x, 0.2, z);
+        m.compose(p, q, s);
+        dockPlankRef.current.setMatrixAt(di++, m);
+
+        p.set(x - 3.5, 1.1, z - 1.5);
+        m.compose(p, q, s);
+        bollardRef.current.setMatrixAt(bi++, m);
+        p.set(x + 3.5, 1.1, z + 1.5);
+        m.compose(p, q, s);
+        bollardRef.current.setMatrixAt(bi++, m);
+      }
+    }
+
+    dockPlankRef.current.instanceMatrix.needsUpdate = true;
+    bollardRef.current.instanceMatrix.needsUpdate = true;
+  }, [river, dockCount, dockSpacing]);
+
+  useEffect(() => {
+    return () => {
+      Object.values(geos).forEach(g => g.dispose());
+      Object.values(mats).forEach(m => m.dispose());
+    };
+  }, [geos, mats]);
+
+  return (
+    <>
+      <instancedMesh ref={dockPlankRef} args={[geos.plank, mats.plank, dockCount]} />
+      <instancedMesh ref={bollardRef} args={[geos.bollard, mats.bollard, totalBollards]} />
+    </>
+  );
+}
+
+// Suspension bridge inspired by git-city's GoldenGateBridge — LeetCode orange cables
+function Bridge({ bridge }: { bridge: CityBridge }) {
+  const [bx, , bz] = bridge.position;
+  const deckLength = bridge.width;
+  const deckWidth = 22;
+  const deckThick = 1.5;
+  const deckY = 8;
+
+  // Tower positions: 22% in from each end (real suspension bridge proportions)
+  const half = deckLength / 2;
+  const towerX = half * 0.56;
+  const towerH = deckLength * 0.08; // towers rise above deck
+  const towerTopY = deckY + towerH;
+  const towerBaseW = 3.5;
+
+  // Cable geometry: parabolic drape between towers
+  const cableSegments = 20;
+  const sag = towerH * 0.45;
+  const cableTopY = towerTopY;
+  const cableCenterY = cableTopY - sag;
+  const cableZ = deckWidth / 2 - 1.2;
+
+  // Generate cable points for one side
+  const makeCablePoints = (startX: number, endX: number, zOff: number) => {
+    const pts: [number, number, number][] = [];
+    const span = endX - startX;
+    for (let i = 0; i <= cableSegments; i++) {
+      const t = i / cableSegments;
+      const x = startX + t * span;
+      // Parabolic curve: lowest at center (t=0.5), highest at ends (t=0, t=1)
+      const normalized = (t - 0.5) * 2; // -1 to 1
+      const y = cableCenterY + sag * normalized * normalized;
+      pts.push([x, y, zOff]);
+    }
+    return pts;
+  };
+
+  // Suspender cables (vertical lines from main cable down to deck)
+  const suspenderCount = 10;
+
+  return (
+    <group position={[bx, 0, bz]} rotation={[0, bridge.rotation ?? 0, 0]}>
+      {/* ── Road Deck ── */}
+      <mesh position={[0, deckY, 0]} geometry={_dBox} scale={[deckLength, deckThick, deckWidth]}>
+        <meshStandardMaterial color="#404850" emissive="#353d45" emissiveIntensity={0.4} />
+      </mesh>
+      {/* Road lane markings (center dashed line) */}
+      {Array.from({ length: Math.floor(deckLength / 12) }, (_, i) => (
+        <mesh key={`lane-${i}`} position={[-half + 6 + i * 12, deckY + deckThick / 2 + 0.05, 0]} geometry={_dBox} scale={[6, 0.1, 0.4]}>
+          <meshStandardMaterial color="#ffa116" emissive="#ffa116" emissiveIntensity={1.5} toneMapped={false} />
+        </mesh>
+      ))}
+
+      {/* ── Guardrails ── */}
+      <mesh position={[0, deckY + 1.2, cableZ]} geometry={_dBox} scale={[deckLength, 1.8, 0.3]}>
+        <meshStandardMaterial color="#ffa116" emissive="#ffa116" emissiveIntensity={0.8} />
+      </mesh>
+      <mesh position={[0, deckY + 1.2, -cableZ]} geometry={_dBox} scale={[deckLength, 1.8, 0.3]}>
+        <meshStandardMaterial color="#ffa116" emissive="#ffa116" emissiveIntensity={0.8} />
+      </mesh>
+
+      {/* ── Twin Towers (both sides of deck) ── */}
+      {[-towerX, towerX].map((tx, ti) => (
+        <group key={`tower-${ti}`}>
+          {/* Tower legs — tapered stone piers from below water to above deck */}
+          {[-cableZ, cableZ].map((tz, zi) => (
+            <group key={`leg-${zi}`}>
+              {/* Underwater base */}
+              <mesh position={[tx, -2, tz]} geometry={_dBox} scale={[5, 4, 5]}>
+                <meshStandardMaterial color="#4a4440" emissive="#3a3430" emissiveIntensity={0.3} />
+              </mesh>
+              {/* Main tower shaft */}
+              <mesh position={[tx, deckY + towerH / 2, tz]} geometry={_dBox} scale={[towerBaseW, towerH + deckY, towerBaseW]}>
+                <meshStandardMaterial color="#555d65" emissive="#454d55" emissiveIntensity={0.4} />
+              </mesh>
+            </group>
+          ))}
+          {/* Cross-beam at top connecting both sides */}
+          <mesh position={[tx, towerTopY - 1, 0]} geometry={_dBox} scale={[towerBaseW, 2, deckWidth]}>
+            <meshStandardMaterial color="#555d65" emissive="#454d55" emissiveIntensity={0.4} />
+          </mesh>
+          {/* Cross-beam at deck level */}
+          <mesh position={[tx, deckY + 2, 0]} geometry={_dBox} scale={[towerBaseW, 1.5, deckWidth]}>
+            <meshStandardMaterial color="#555d65" emissive="#454d55" emissiveIntensity={0.4} />
+          </mesh>
+          {/* Glowing orange beacon at tower top */}
+          <mesh position={[tx, towerTopY + 1.5, 0]}>
+            <sphereGeometry args={[1.2, 8, 6]} />
+            <meshStandardMaterial color="#ffa116" emissive="#ffa116" emissiveIntensity={4} toneMapped={false} />
+          </mesh>
+        </group>
+      ))}
+
+      {/* ── Main Cables (parabolic drape) ── */}
+      {/* Main span: between the two towers */}
+      {[cableZ, -cableZ].map((zOff, ci) => {
+        const mainPts = makeCablePoints(-towerX, towerX, zOff);
+        return (
+          <group key={`cable-main-${ci}`}>
+            {mainPts.slice(0, -1).map((p, i) => {
+              const next = mainPts[i + 1];
+              const mx = (p[0] + next[0]) / 2;
+              const my = (p[1] + next[1]) / 2;
+              const dx = next[0] - p[0];
+              const dy = next[1] - p[1];
+              const len = Math.hypot(dx, dy);
+              const angle = Math.atan2(dy, dx);
+              return (
+                <mesh key={i} position={[mx, my, zOff]} rotation={[0, 0, angle]} geometry={_dBox} scale={[len, 0.35, 0.35]}>
+                  <meshStandardMaterial color="#ffa116" emissive="#ffa116" emissiveIntensity={2.0} toneMapped={false} />
+                </mesh>
+              );
+            })}
+          </group>
+        );
+      })}
+
+      {/* Side spans: tower to deck edge (sloping up) */}
+      {[cableZ, -cableZ].map((zOff, ci) =>
+        [-1, 1].map((side) => {
+          const startX = side === -1 ? -half : towerX;
+          const endX = side === -1 ? -towerX : half;
+          const startY = deckY + 2;
+          const endY = towerTopY;
+          return (
+            <mesh
+              key={`side-${ci}-${side}`}
+              position={[(startX + endX) / 2, (startY + endY) / 2, zOff]}
+              rotation={[0, 0, Math.atan2(endY - startY, endX - startX)]}
+              geometry={_dBox}
+              scale={[Math.hypot(endX - startX, endY - startY), 0.35, 0.35]}
+            >
+              <meshStandardMaterial color="#ffa116" emissive="#ffa116" emissiveIntensity={2.0} toneMapped={false} />
+            </mesh>
+          );
+        })
+      )}
+
+      {/* ── Vertical Suspenders (main span only) ── */}
+      {[cableZ, -cableZ].map((zOff, ci) => {
+        const mainPts = makeCablePoints(-towerX, towerX, zOff);
+        return Array.from({ length: suspenderCount }, (_, si) => {
+          const t = (si + 1) / (suspenderCount + 1);
+          const idx = Math.round(t * cableSegments);
+          const cablePt = mainPts[Math.min(idx, mainPts.length - 1)];
+          const suspH = cablePt[1] - deckY - deckThick / 2;
+          if (suspH < 1) return null;
+          return (
+            <mesh key={`susp-${ci}-${si}`} position={[cablePt[0], deckY + deckThick / 2 + suspH / 2, zOff]} geometry={_dBox} scale={[0.2, suspH, 0.2]}>
+              <meshStandardMaterial color="#ffa116" emissive="#c88010" emissiveIntensity={1.0} />
+            </mesh>
+          );
+        });
+      })}
+
+      {/* ── Street Lamps on Deck ── */}
+      {Array.from({ length: Math.max(2, Math.floor(deckLength / 30)) }, (_, i) => {
+        const lampX = -half + 15 + i * 30;
+        if (Math.abs(lampX - towerX) < 5 || Math.abs(lampX + towerX) < 5) return null;
+        return (
+          <group key={`lamp-${i}`}>
+            {[cableZ - 1, -(cableZ - 1)].map((lz, li) => (
+              <group key={`l-${li}`}>
+                <mesh position={[lampX, deckY + 4, lz]} geometry={_dBox} scale={[0.3, 6, 0.3]}>
+                  <meshStandardMaterial color="#555" emissive="#444" emissiveIntensity={0.3} />
+                </mesh>
+                <mesh position={[lampX, deckY + 7.5, lz]}>
+                  <sphereGeometry args={[0.6, 6, 4]} />
+                  <meshStandardMaterial color="#ffd080" emissive="#ffd080" emissiveIntensity={2.5} toneMapped={false} />
+                </mesh>
+              </group>
+            ))}
+          </group>
+        );
+      })}
+    </group>
+  );
+}
+
 // ─── Decoration Renderer ──────────────────────────────────────
 
 function Decorations({ items }: { items: CityDecoration[] }) {
@@ -1321,6 +1805,8 @@ function Decorations({ items }: { items: CityDecoration[] }) {
           case 'bench': return <ParkBench key={`bench-${i}`} position={d.position} rotation={d.rotation} />;
           case 'fountain': return <Fountain key={`fountain-${i}`} position={d.position} />;
           case 'sidewalk': return <Sidewalk key={`walk-${i}`} position={d.position} size={d.size!} />;
+          case 'autoRickshaw': return <AutoRickshaw key={`rick-${i}`} position={d.position} rotation={d.rotation} />;
+          case 'busStop': return null; // Handled separately in BusTransit component to make it interactive!
           default: return null;
         }
       })}
@@ -1339,6 +1825,7 @@ const _dLocalPos = new THREE.Vector3();
 const _dPartQuat = new THREE.Quaternion();
 
 function InstancedDecorations({ items, roadMarkingColor, sidewalkColor }: { items: CityDecoration[]; roadMarkingColor: string; sidewalkColor: string }) {
+  const INSTANCED_TYPES = new Set(['tree', 'streetLamp', 'car', 'roadMarking', 'bench', 'fountain', 'sidewalk']);
   const trees = useMemo(() => items.filter(d => d.type === 'tree'), [items]);
   const lamps = useMemo(() => items.filter(d => d.type === 'streetLamp'), [items]);
   const cars = useMemo(() => items.filter(d => d.type === 'car'), [items]);
@@ -1346,6 +1833,8 @@ function InstancedDecorations({ items, roadMarkingColor, sidewalkColor }: { item
   const benches = useMemo(() => items.filter(d => d.type === 'bench'), [items]);
   const fountains = useMemo(() => items.filter(d => d.type === 'fountain'), [items]);
   const sidewalks = useMemo(() => items.filter(d => d.type === 'sidewalk'), [items]);
+  // Non-instanced Bengaluru decorations (rendered individually via Decorations fallback)
+  const customItems = useMemo(() => items.filter(d => !INSTANCED_TYPES.has(d.type)), [items]);
 
   const treeTrunkRef = useRef<THREE.InstancedMesh>(null);
   const treeCanopyRef = useRef<THREE.InstancedMesh>(null);
@@ -1428,6 +1917,12 @@ function InstancedDecorations({ items, roadMarkingColor, sidewalkColor }: { item
     treeTrunkRef.current.instanceMatrix.needsUpdate = true;
     treeCanopyRef.current.instanceMatrix.needsUpdate = true;
     if (treeCanopyRef.current.instanceColor) treeCanopyRef.current.instanceColor.needsUpdate = true;
+
+    // Compute bounds for frustum culling
+    treeTrunkRef.current.computeBoundingBox();
+    treeTrunkRef.current.computeBoundingSphere();
+    treeCanopyRef.current.computeBoundingBox();
+    treeCanopyRef.current.computeBoundingSphere();
   }, [trees]);
 
   // Set up lamp instances
@@ -1449,6 +1944,12 @@ function InstancedDecorations({ items, roadMarkingColor, sidewalkColor }: { item
 
     lampPoleRef.current.instanceMatrix.needsUpdate = true;
     lampLightRef.current.instanceMatrix.needsUpdate = true;
+
+    // Compute bounds for frustum culling
+    lampPoleRef.current.computeBoundingBox();
+    lampPoleRef.current.computeBoundingSphere();
+    lampLightRef.current.computeBoundingBox();
+    lampLightRef.current.computeBoundingSphere();
   }, [lamps]);
 
   // Set up car instances
@@ -1480,6 +1981,12 @@ function InstancedDecorations({ items, roadMarkingColor, sidewalkColor }: { item
     carCabinRef.current.instanceMatrix.needsUpdate = true;
     if (carBodyRef.current.instanceColor) carBodyRef.current.instanceColor.needsUpdate = true;
     if (carCabinRef.current.instanceColor) carCabinRef.current.instanceColor.needsUpdate = true;
+
+    // Compute bounds for frustum culling
+    carBodyRef.current.computeBoundingBox();
+    carBodyRef.current.computeBoundingSphere();
+    carCabinRef.current.computeBoundingBox();
+    carCabinRef.current.computeBoundingSphere();
   }, [cars]);
 
   // Set up road marking instances
@@ -1500,6 +2007,10 @@ function InstancedDecorations({ items, roadMarkingColor, sidewalkColor }: { item
     }
 
     roadMarkingRef.current.instanceMatrix.needsUpdate = true;
+
+    // Compute bounds for frustum culling
+    roadMarkingRef.current.computeBoundingBox();
+    roadMarkingRef.current.computeBoundingSphere();
   }, [roadMarkings]);
 
   // Set up bench instances
@@ -1549,6 +2060,16 @@ function InstancedDecorations({ items, roadMarkingColor, sidewalkColor }: { item
     benchBackRef.current.instanceMatrix.needsUpdate = true;
     benchLegLRef.current.instanceMatrix.needsUpdate = true;
     benchLegRRef.current.instanceMatrix.needsUpdate = true;
+
+    // Compute bounds for frustum culling
+    benchSeatRef.current.computeBoundingBox();
+    benchSeatRef.current.computeBoundingSphere();
+    benchBackRef.current.computeBoundingBox();
+    benchBackRef.current.computeBoundingSphere();
+    benchLegLRef.current.computeBoundingBox();
+    benchLegLRef.current.computeBoundingSphere();
+    benchLegRRef.current.computeBoundingBox();
+    benchLegRRef.current.computeBoundingSphere();
   }, [benches]);
 
   // Set up fountain instances
@@ -1585,6 +2106,16 @@ function InstancedDecorations({ items, roadMarkingColor, sidewalkColor }: { item
     fountainMidRef.current.instanceMatrix.needsUpdate = true;
     fountainUpperRef.current.instanceMatrix.needsUpdate = true;
     fountainWaterRef.current.instanceMatrix.needsUpdate = true;
+
+    // Compute bounds for frustum culling
+    fountainBasinRef.current.computeBoundingBox();
+    fountainBasinRef.current.computeBoundingSphere();
+    fountainMidRef.current.computeBoundingBox();
+    fountainMidRef.current.computeBoundingSphere();
+    fountainUpperRef.current.computeBoundingBox();
+    fountainUpperRef.current.computeBoundingSphere();
+    fountainWaterRef.current.computeBoundingBox();
+    fountainWaterRef.current.computeBoundingSphere();
   }, [fountains]);
 
   // Set up sidewalk instances
@@ -1605,6 +2136,10 @@ function InstancedDecorations({ items, roadMarkingColor, sidewalkColor }: { item
     }
 
     sidewalkRef.current.instanceMatrix.needsUpdate = true;
+
+    // Compute bounds for frustum culling
+    sidewalkRef.current.computeBoundingBox();
+    sidewalkRef.current.computeBoundingSphere();
   }, [sidewalks]);
 
   // Dispose
@@ -1619,44 +2154,46 @@ function InstancedDecorations({ items, roadMarkingColor, sidewalkColor }: { item
     <>
       {trees.length > 0 && (
         <>
-          <instancedMesh ref={treeTrunkRef} args={[geos.treeTrunk, mats.treeTrunk, trees.length]} frustumCulled={false} />
-          <instancedMesh ref={treeCanopyRef} args={[geos.treeCanopy, mats.treeCanopy, trees.length]} frustumCulled={false} />
+          <instancedMesh ref={treeTrunkRef} args={[geos.treeTrunk, mats.treeTrunk, trees.length]} frustumCulled={true} />
+          <instancedMesh ref={treeCanopyRef} args={[geos.treeCanopy, mats.treeCanopy, trees.length]} frustumCulled={true} />
         </>
       )}
       {lamps.length > 0 && (
         <>
-          <instancedMesh ref={lampPoleRef} args={[geos.lampPole, mats.lampPole, lamps.length]} frustumCulled={false} />
-          <instancedMesh ref={lampLightRef} args={[geos.lampLight, mats.lampLight, lamps.length]} frustumCulled={false} />
+          <instancedMesh ref={lampPoleRef} args={[geos.lampPole, mats.lampPole, lamps.length]} frustumCulled={true} />
+          <instancedMesh ref={lampLightRef} args={[geos.lampLight, mats.lampLight, lamps.length]} frustumCulled={true} />
         </>
       )}
       {cars.length > 0 && (
         <>
-          <instancedMesh ref={carBodyRef} args={[geos.carBody, mats.carBody, cars.length]} frustumCulled={false} />
-          <instancedMesh ref={carCabinRef} args={[geos.carCabin, mats.carCabin, cars.length]} frustumCulled={false} />
+          <instancedMesh ref={carBodyRef} args={[geos.carBody, mats.carBody, cars.length]} frustumCulled={true} />
+          <instancedMesh ref={carCabinRef} args={[geos.carCabin, mats.carCabin, cars.length]} frustumCulled={true} />
         </>
       )}
       {roadMarkings.length > 0 && (
-        <instancedMesh ref={roadMarkingRef} args={[geos.roadMarking, mats.roadMarking, roadMarkings.length]} frustumCulled={false} />
+        <instancedMesh ref={roadMarkingRef} args={[geos.roadMarking, mats.roadMarking, roadMarkings.length]} frustumCulled={true} />
       )}
       {benches.length > 0 && (
         <>
-          <instancedMesh ref={benchSeatRef} args={[_dBox, mats.benchWood, benches.length]} frustumCulled={false} />
-          <instancedMesh ref={benchBackRef} args={[_dBox, mats.benchWood, benches.length]} frustumCulled={false} />
-          <instancedMesh ref={benchLegLRef} args={[_dBox, mats.benchMetal, benches.length]} frustumCulled={false} />
-          <instancedMesh ref={benchLegRRef} args={[_dBox, mats.benchMetal, benches.length]} frustumCulled={false} />
+          <instancedMesh ref={benchSeatRef} args={[_dBox, mats.benchWood, benches.length]} frustumCulled={true} />
+          <instancedMesh ref={benchBackRef} args={[_dBox, mats.benchWood, benches.length]} frustumCulled={true} />
+          <instancedMesh ref={benchLegLRef} args={[_dBox, mats.benchMetal, benches.length]} frustumCulled={true} />
+          <instancedMesh ref={benchLegRRef} args={[_dBox, mats.benchMetal, benches.length]} frustumCulled={true} />
         </>
       )}
       {fountains.length > 0 && (
         <>
-          <instancedMesh ref={fountainBasinRef} args={[geos.fountainBasin, mats.fountainStone1, fountains.length]} frustumCulled={false} />
-          <instancedMesh ref={fountainMidRef} args={[geos.fountainMid, mats.fountainStone2, fountains.length]} frustumCulled={false} />
-          <instancedMesh ref={fountainUpperRef} args={[geos.fountainUpper, mats.fountainStone3, fountains.length]} frustumCulled={false} />
-          <instancedMesh ref={fountainWaterRef} args={[geos.fountainWater, mats.fountainWater, fountains.length]} frustumCulled={false} />
+          <instancedMesh ref={fountainBasinRef} args={[geos.fountainBasin, mats.fountainStone1, fountains.length]} frustumCulled={true} />
+          <instancedMesh ref={fountainMidRef} args={[geos.fountainMid, mats.fountainStone2, fountains.length]} frustumCulled={true} />
+          <instancedMesh ref={fountainUpperRef} args={[geos.fountainUpper, mats.fountainStone3, fountains.length]} frustumCulled={true} />
+          <instancedMesh ref={fountainWaterRef} args={[geos.fountainWater, mats.fountainWater, fountains.length]} frustumCulled={true} />
         </>
       )}
       {sidewalks.length > 0 && (
-        <instancedMesh ref={sidewalkRef} args={[_dPlane, mats.sidewalk, sidewalks.length]} frustumCulled={false} />
+        <instancedMesh ref={sidewalkRef} args={[_dPlane, mats.sidewalk, sidewalks.length]} frustumCulled={true} />
       )}
+      {/* Bengaluru-themed decorations: rendered individually (not instanced) */}
+      {customItems.length > 0 && <Decorations items={customItems} />}
     </>
   );
 }
@@ -1668,24 +2205,33 @@ function OrbitScene({
   focusedBuilding,
   focusedBuildingB,
   relicFocus,
+  isNewBuilding,
 }: {
   buildings: CityBuilding[];
   focusedBuilding: string | null;
   focusedBuildingB?: string | null;
   relicFocus?: { x: number; y: number; z: number } | null;
+  isNewBuilding?: boolean;
 }) {
   const controlsRef = useRef<any>(null);
   const { camera } = useThree();
 
   // Reset camera on mount — wide panorama centered on founder area
   useEffect(() => {
-    camera.position.set(800, 700, 1000);
+    camera.position.set(1300, 700, 1500);
     camera.lookAt(TARGET_X, TARGET_Y, TARGET_Z);
   }, [camera]);
 
   return (
     <>
-      <CameraFocus buildings={buildings} focusedBuilding={focusedBuilding} focusedBuildingB={focusedBuildingB} relicFocus={relicFocus} controlsRef={controlsRef} />
+      <CameraFocus
+        buildings={buildings}
+        focusedBuilding={focusedBuilding}
+        focusedBuildingB={focusedBuildingB}
+        relicFocus={relicFocus}
+        isNewBuilding={isNewBuilding}
+        controlsRef={controlsRef}
+      />
       <OrbitControls
         ref={controlsRef}
         enableDamping
@@ -1736,9 +2282,13 @@ function WallpaperOrbitScene({ speed }: { speed: number }) {
 // ─── Main Canvas ─────────────────────────────────────────────
 
 interface Props {
+  onReady?: () => void;
   buildings: CityBuilding[];
   plazas: CityPlaza[];
   decorations: CityDecoration[];
+  river?: CityRiver | null;
+  bridges?: CityBridge[];
+  canals?: CityCanal[];
   flyMode: boolean;
   flyVehicle?: string;
   onExitFly: (aborted?: boolean) => void;
@@ -1790,6 +2340,14 @@ interface Props {
   onCodeForgeClick?: () => void;
   onSolanaClick?: () => void;
   multiplayerPlayers?: Map<string, CityPlayer>;
+  isNewBuilding?: boolean;
+  transitState?: {
+    active: boolean;
+    fromDistrict: string;
+    toDistrict: string;
+  } | null;
+  onArrival?: (targetDistrict: string) => void;
+  onOpenTransitMenu?: (fromDistrict: string) => void;
 }
 
 // Dynamically adjust scene exposure based on city energy (devs coding)
@@ -1819,9 +2377,13 @@ function CityExposure({ cityEnergy }: { cityEnergy: number }) {
 const RABBIT_PLAZA_INDICES = [1, 2, 4, 7, 10]; // plazas[1]=slot3, [2]=slot7, [4]=slot18, [7]=slot42, [10]=slot75
 
 export default function CityCanvas({
+  onReady,
   buildings,
   plazas,
   decorations,
+  river,
+  bridges,
+  canals,
   flyMode,
   flyVehicle,
   onExitFly,
@@ -1873,10 +2435,18 @@ export default function CityCanvas({
   initialFlightPos,
   initialFlightYaw,
   multiplayerPlayers,
+  isNewBuilding,
+  transitState,
+  onArrival,
+  onOpenTransitMenu,
 }: Props) {
   const { isRaining } = useWeather();
   const router = useRouter();
   const [dungeonOpen, setDungeonOpen] = useState(false);
+  const [codeForgeOpen, setCodeForgeOpen] = useState(false);
+  const skyAdsMemo = useMemo(() => skyAds ?? [], [skyAds]);
+  const onReadyRef = useRef(onReady);
+  onReadyRef.current = onReady;
   const t = THEMES[themeIndex] ?? THEMES[0];
   const [kbBuildingIndex, setKbBuildingIndex] = useState(0);
   const showPerf = typeof window !== "undefined" && new URLSearchParams(window.location.search).has("perf");
@@ -1929,19 +2499,31 @@ export default function CityCanvas({
     router.push("/roadmap");
   };
   const landmarkPositions = useMemo(() => {
-    const radius = 380;
-    const count = 14;
     const posList: [number, number, number][] = [];
+    const count = 15;
+    let seed = 99999;
+    function random() {
+      const x = Math.sin(seed++) * 10000;
+      return x - Math.floor(x);
+    }
+    // Place landmarks INSIDE the city among the buildings — not far outside
+    // Use 15%-45% of cityRadius so they sit within the building clusters
+    const minR = cityRadius * 0.4;
+    const maxR = cityRadius * 1.3;
+    const rangeR = maxR - minR;
     for (let i = 0; i < count; i++) {
-      const angle = (i / count) * Math.PI * 2 + 0.25;
-      posList.push([
-        Math.round(Math.cos(angle) * radius),
-        0,
-        Math.round(Math.sin(angle) * radius),
-      ]);
+      const radius = minR + random() * rangeR;
+      const angle = (i / count) * Math.PI * 2 + random() * 0.4;
+      const x = Math.round(Math.cos(angle) * radius);
+      let z = Math.round(Math.sin(angle) * radius);
+      // Push away from the river channel (Z: -95 to 95)
+      if (Math.abs(z) < 95) {
+        z = z >= 0 ? 95 + random() * 60 : -95 - random() * 60;
+      }
+      posList.push([x, 0, z]);
     }
     return posList;
-  }, []);
+  }, [cityRadius]);
 
 
   return (
@@ -1951,8 +2533,8 @@ export default function CityCanvas({
       aria-label="3D LeetCode City — use arrow keys to move between buildings, Enter to open a profile, Escape to close. Press Tab to leave the city."
       tabIndex={0}
       onKeyDown={handleCanvasKeyDown}
-      camera={{ position: [400, 450, 600], fov: 55, near: 1.0, far: 4000 }}
-      dpr={[1, 2]}
+      camera={{ position: [1300, 700, 1500], fov: 55, near: 1.0, far: 6100 }}
+      dpr={[1, 1.5]}
       onCreated={({ gl, scene }) => {
         try {
           // Keep the canvas pixelated via CSS; don't override the Canvas `dpr` prop here
@@ -1995,6 +2577,15 @@ export default function CityCanvas({
           // eslint-disable-next-line no-console
           console.warn("CityCanvas: failed to enforce nearest filtering", e);
         }
+
+        // Signal that WebGL is alive — wait 2 rAF frames so the GPU
+        // has actually drawn at least one frame before we dismiss the
+        // loading screen.
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            onReadyRef.current?.();
+          });
+        });
       }}
       gl={{ antialias: true, powerPreference: "high-performance", toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.3 }}
       style={{ position: "fixed", inset: 0, width: "100vw", height: "100vh" }}
@@ -2024,8 +2615,14 @@ export default function CityCanvas({
         <WallpaperOrbitScene speed={wallpaperSpeed ?? 0.08} />
       ) : (
         <>
-          {!introMode && !rabbitCinematic && !flyMode && (!raidPhase || raidPhase === "idle" || raidPhase === "preview") && (
-            <OrbitScene buildings={buildings} focusedBuilding={focusedBuilding ?? null} focusedBuildingB={focusedBuildingB} />
+          {!introMode && !rabbitCinematic && !flyMode && !(transitState?.active) && (!raidPhase || raidPhase === "idle" || raidPhase === "preview") && (
+            <OrbitScene
+              buildings={buildings}
+              focusedBuilding={focusedBuilding ?? null}
+              focusedBuildingB={focusedBuildingB}
+              isNewBuilding={isNewBuilding}
+              relicFocus={relicFocus}
+            />
           )}
 
           {raidPhase && raidPhase !== "idle" && raidPhase !== "preview" && (
@@ -2075,7 +2672,7 @@ export default function CityCanvas({
             <AstralObservatory onClick={() => { }} position={landmarkPositions[3]} />
             <CryptOfEchoes onClick={() => { }} position={landmarkPositions[4]} />
             <SunkenSanctum onClick={() => { }} position={landmarkPositions[5]} />
-            <CodeForge onClick={onCodeForgeClick ?? (() => { })} position={landmarkPositions[6]} />
+            <CodeForge onClick={() => setCodeForgeOpen(true)} position={landmarkPositions[6]} />
           </Suspense>
           <EArcadeLandmark
             onClick={onEArcadeClick ?? (() => { })}
@@ -2089,7 +2686,7 @@ export default function CityCanvas({
              themeAccent={t.building.accent}
              themeWindowLit={t.building.windowLit}
              themeFace={t.building.face}
-             position={[373, 0, -75]}
+             position={landmarkPositions[14]}
           />
           
           <Suspense fallback={null}>
@@ -2121,6 +2718,33 @@ export default function CityCanvas({
             );
           })()}
 
+          {river && (
+            <>
+              <River river={river} waterColor={t.waterColor} waterEmissive={t.waterEmissive} />
+              <RiverText river={river} />
+              <Waterfront river={river} dockColor={t.dockColor} />
+            </>
+          )}
+
+          {bridges?.map((b, i) => (
+            <Bridge key={`bridge-${i}`} bridge={b} />
+          ))}
+
+          {canals && canals.length > 0 && (
+            <CityCanals canals={canals} waterColor={t.waterColor} waterEmissive={t.waterEmissive} />
+          )}
+
+          {/* Render Bridge Gates at the main central bridge entrances to split the layout */}
+          {river && bridges && bridges[0] && (() => {
+            const [bx, , bz] = bridges[0].position;
+            return (
+              <>
+                <BridgeGate position={[bx, 0, bz + 80]} />
+                <BridgeGate position={[bx, 0, bz - 80]} />
+              </>
+            );
+          })()}
+
           <CityScene
             buildings={buildings}
             colors={t.building}
@@ -2142,6 +2766,18 @@ export default function CityCanvas({
           />
 
           <InstancedDecorations items={decorations} roadMarkingColor={t.roadMarkingColor} sidewalkColor={t.sidewalkColor} />
+
+          <BusTransit
+            plazas={plazas}
+            bridges={bridges ?? []}
+            transitState={transitState ?? null}
+            onArrival={onArrival ?? (() => {})}
+            onOpenTransitMenu={onOpenTransitMenu ?? (() => {})}
+          />
+
+          <InterCityConnections />
+          <MetroSystem />
+          <TramSystem />
           {!wallpaperMode && skyAds && skyAds.length > 0 && (
             <>
               <SkyAds ads={skyAds} cityRadius={cityRadius} flyMode={flyMode} onAdClick={onAdClick} onAdViewed={onAdViewed} />
@@ -2159,8 +2795,6 @@ export default function CityCanvas({
         <>
           <RainParticles />
           <RainRippleGround />
-          <color attach="background" args={["#3a404a"]} />
-          <fog attach="fog" args={["#3a404a", 30, 300]} />
         </>
       )}
 
@@ -2176,6 +2810,9 @@ export default function CityCanvas({
     </div>
     {dungeonOpen && (
       <DungeonModal onClose={() => setDungeonOpen(false)} />
+    )}
+    {codeForgeOpen && (
+      <CodeForgeModal onClose={() => setCodeForgeOpen(false)} />
     )}
   </>
   );
