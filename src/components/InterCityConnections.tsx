@@ -510,57 +510,18 @@ export function JungleCorridor({ start: startCoords, end: endCoords }: BridgePro
 }
 
 // ─── Main Connections Assembly ──────────────────────────────────
+// In the unified concentric city layout, all DISTRICT_ORIGINS are [0,0,0].
+// Inter-district connectivity is handled by the cross-road dividers and metro tracks.
+// This component only renders when districts have distinct origins (legacy multi-city layout).
 export default function InterCityConnections() {
-  const connections = useMemo(() => {
-    const list: React.ReactNode[] = [];
+  const o = DISTRICT_ORIGINS;
 
-    // Origins map
-    const o = DISTRICT_ORIGINS;
+  // Check if all origins are effectively the same (unified layout)
+  const allSame = Object.values(o).every(
+    (v) => Math.abs(v[0]) < 1 && Math.abs(v[2]) < 1
+  );
+  if (allSame) return null;
 
-    // Connect Downtown (Bengaluru) to all main suburbs
-    
-    // 1. Downtown to Mumbai (frontend) - Suspension Bridge
-    if (o.downtown && o.frontend) {
-      list.push(<SuspensionBridge key="bengaluru-mumbai" start={o.downtown} end={o.frontend} />);
-    }
-
-    // 2. Downtown to Hyderabad (backend) - Highway Flyover
-    if (o.downtown && o.backend) {
-      list.push(<HighwayFlyover key="bengaluru-hyderabad" start={o.downtown} end={o.backend} labelText="HYDERABAD 2.5 KM ->" />);
-    }
- 
-    // 3. Downtown to Pune (mobile) - Highway Flyover
-    if (o.downtown && o.mobile) {
-      list.push(<HighwayFlyover key="bengaluru-pune" start={o.downtown} end={o.mobile} labelText="PUNE 1.8 KM ->" />);
-    }
- 
-    // 4. Mumbai (frontend) to Chennai (security) - Jungle Corridor
-    if (o.frontend && o.security) {
-      list.push(<JungleCorridor key="mumbai-chennai" start={o.frontend} end={o.security} />);
-    }
- 
-    // 5. Hyderabad (backend) to Chennai (security) - Highway Flyover
-    if (o.backend && o.security) {
-      list.push(<HighwayFlyover key="hyderabad-chennai" start={o.backend} end={o.security} labelText="CHENNAI 3.2 KM ->" />);
-    }
- 
-    // 6. Mumbai (frontend) to Ahmedabad (data_ai) - Suspension Bridge
-    if (o.frontend && o.data_ai) {
-      list.push(<SuspensionBridge key="mumbai-ahmedabad" start={o.frontend} end={o.data_ai} />);
-    }
- 
-    // 7. Pune (mobile) to Ahmedabad (data_ai) - Highway Flyover
-    if (o.mobile && o.data_ai) {
-      list.push(<HighwayFlyover key="pune-ahmedabad" start={o.mobile} end={o.data_ai} labelText="MUMBAI 4.1 KM ->" />);
-    }
- 
-    // 8. Pune (mobile) to Kolkata (devops) - Highway Flyover
-    if (o.mobile && o.devops) {
-      list.push(<HighwayFlyover key="pune-kolkata" start={o.mobile} end={o.devops} labelText="KOLKATA 5.0 KM ->" />);
-    }
-
-    return list;
-  }, []);
-
-  return <>{connections}</>;
+  return null;
 }
+

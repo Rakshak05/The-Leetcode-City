@@ -3,110 +3,74 @@
 import React, { useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
-import { DISTRICT_ORIGINS } from "@/lib/github";
+import type { CityBuilding } from "@/lib/github";
+import { DISTRICT_COLORS } from "@/lib/github";
 
 interface LocalTramProps {
   center: [number, number, number];
   color: string;
-  radius?: number;
-  speed?: number;
+  radius: number;
+  speed: number;
 }
 
-function LocalTramLoop({ center, color, radius = 62, speed = 0.25 }: LocalTramProps) {
+function LocalTramLoop({ center, color, radius, speed }: LocalTramProps) {
   const tramRef = useRef<THREE.Group>(null);
-
-  // Pre-calculate track segment lines (for visual details)
-  const trackSegments = useMemo(() => {
-    const list: React.ReactNode[] = [];
-    const segments = 16;
-    for (let i = 0; i < segments; i++) {
-      const a1 = (i / segments) * Math.PI * 2;
-      const a2 = ((i + 1) / segments) * Math.PI * 2;
-      
-      const x1 = Math.cos(a1) * radius;
-      const z1 = Math.sin(a1) * radius;
-      const x2 = Math.cos(a2) * radius;
-      const z2 = Math.sin(a2) * radius;
-
-      const pos = new THREE.Vector3((x1 + x2) / 2, 0.05, (z1 + z2) / 2);
-      const angle = Math.atan2(x2 - x1, z2 - z1);
-      const len = Math.sqrt((x2 - x1) ** 2 + (z2 - z1) ** 2);
-
-      list.push(
-        <group key={i} position={[pos.x, pos.y, pos.z]} rotation={[0, angle, 0]}>
-          {/* Steel sleepers */}
-          {i % 2 === 0 && (
-            <mesh position={[0, -0.02, 0]}>
-              <boxGeometry args={[4.5, 0.06, 0.6]} />
-              <meshStandardMaterial color="#423528" roughness={0.9} />
-            </mesh>
-          )}
-          {/* Rails */}
-          <mesh position={[-1.6, 0.02, 0]}>
-            <boxGeometry args={[0.15, 0.1, len + 0.1]} />
-            <meshStandardMaterial color="#8a8f99" metalness={0.95} roughness={0.1} />
-          </mesh>
-          <mesh position={[1.6, 0.02, 0]}>
-            <boxGeometry args={[0.15, 0.1, len + 0.1]} />
-            <meshStandardMaterial color="#8a8f99" metalness={0.95} roughness={0.1} />
-          </mesh>
-        </group>
-      );
+  
+  // Build circular track geometry
+  const trackGeometry = useMemo(() => {
+    const pts: THREE.Vector3[] = [];
+    const segments = 64;
+    for (let i = 0; i <= segments; i++) {
+      const angle = (i / segments) * Math.PI * 2;
+      pts.push(new THREE.Vector3(
+        center[0] + Math.cos(angle) * radius,
+        center[1] + 1,
+        center[2] + Math.sin(angle) * radius,
+      ));
     }
-    return list;
-  }, [radius]);
+    return new THREE.CatmullRomCurve3(pts, true);
+  }, [center, radius]);
 
   useFrame(({ clock }) => {
-    if (!tramRef.current) return;
-    const time = clock.getElapsedTime() * speed;
-    const x = Math.cos(time) * radius;
-    const z = Math.sin(time) * radius;
-
-    // Set position relative to the local city origin
-    tramRef.current.position.set(x, 0.45, z);
+    if (!tramRef.current || !trackGeometry) return;
     
-    // Face the tangent (heading of travel)
-    tramRef.current.rotation.y = -time + Math.PI;
+    const t = (clock.getElapsedTime() * speed) % 1;
+    const pos = trackGeometry.getPointAt(t);
+    const tangent = trackGeometry.getTangentAt(t);
+    
+    tramRef.current.position.copy(pos);
+    tramRef.current.rotation.y = Math.atan2(tangent.x, tangent.z);
   });
 
-  return (
-    <group position={center}>
-      {/* Visual steel tracks on the ground */}
-      {trackSegments}
 
-      {/* Animated Tram car */}
+  return (
+    <group>
+      {/* Rail track (visible line) */}
+      {/* Circular track rail (torus ring at ground level) */}
+      <mesh position={[center[0], center[1] + 0.3, center[2]]} rotation={[Math.PI / 2, 0, 0]}>
+        <torusGeometry args={[radius, 0.3, 4, 64]} />
+        <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.5} toneMapped={false} transparent opacity={0.5} />
+      </mesh>
+      
+      {/* Tram Car */}
       <group ref={tramRef}>
-        {/* Tram Body (Vintage styled box) */}
-        <mesh position={[0, 1.4, 0]}>
-          <boxGeometry args={[3.0, 2.5, 9.5]} />
-          <meshStandardMaterial color={color} roughness={0.3} metalness={0.4} />
+        {/* Body */}
+        <mesh position={[0, 2, 0]}>
+          <boxGeometry args={[4, 3.5, 12]} />
+          <meshStandardMaterial color={color} metalness={0.7} roughness={0.3} />
         </mesh>
-        {/* Yellow glowing strip at top */}
-        <mesh position={[0, 2.65, 0]}>
-          <boxGeometry args={[2.8, 0.2, 9.7]} />
-          <meshStandardMaterial color="#ffa116" emissive="#ffa116" emissiveIntensity={2} toneMapped={false} />
-        </mesh>
-        {/* Roof (dark grey curved plate) */}
-        <mesh position={[0, 2.8, 0]}>
-          <boxGeometry args={[3.2, 0.2, 10.0]} />
-          <meshStandardMaterial color="#2d2d30" roughness={0.8} />
-        </mesh>
-        {/* Glowing Windows */}
-        {[-3, -1.2, 0.6, 2.4].map((offsetZ) => (
-          [-1.52, 1.52].map((side) => (
-            <mesh key={`twin-${offsetZ}-${side}`} position={[side, 1.6, offsetZ]}>
-              <boxGeometry args={[0.05, 1.0, 1.2]} />
-              <meshStandardMaterial color="#ffde59" emissive="#ffde59" emissiveIntensity={1.8} toneMapped={false} />
+        {/* Windows */}
+        {[-4, -2, 0, 2, 4].map((z) => (
+          [-1.1, 1.1].map((side) => (
+            <mesh key={`tw-${z}-${side}`} position={[2.1 * side, 2.2, z]}>
+              <boxGeometry args={[0.1, 1.2, 1.4]} />
+              <meshStandardMaterial color="#00ffcc" emissive="#00ffcc" emissiveIntensity={1.5} toneMapped={false} />
             </mesh>
           ))
         ))}
-        {/* Tram Headlights (Front and Back) */}
-        <mesh position={[0, 0.9, 4.8]}>
-          <sphereGeometry args={[0.38, 8, 8]} />
-          <meshStandardMaterial color="#fff" emissive="#fff" emissiveIntensity={4} toneMapped={false} />
-        </mesh>
-        <mesh position={[0, 0.9, -4.8]}>
-          <sphereGeometry args={[0.38, 8, 8]} />
+        {/* Headlight */}
+        <mesh position={[0, 1.8, 6.1]}>
+          <sphereGeometry args={[0.4, 6, 6]} />
           <meshStandardMaterial color="#fff" emissive="#fff" emissiveIntensity={4} toneMapped={false} />
         </mesh>
       </group>
@@ -114,20 +78,57 @@ function LocalTramLoop({ center, color, radius = 62, speed = 0.25 }: LocalTramPr
   );
 }
 
-export default function TramSystem() {
-  const o = DISTRICT_ORIGINS;
+// Phase 3: TramSystem computes district centers from buildings array
+// and places local tram loops around each district's center.
+export default function TramSystem({ buildings }: { buildings?: CityBuilding[] }) {
+  // Compute district centers from buildings
+  const districtCenters = useMemo(() => {
+    if (!buildings || buildings.length === 0) return [];
 
-  // We place a local tram loop around each city's plaza center (origins)
+    const groups: Record<string, { sumX: number; sumZ: number; count: number }> = {};
+    for (const b of buildings) {
+      const did = b.district ?? 'fullstack';
+      if (!groups[did]) groups[did] = { sumX: 0, sumZ: 0, count: 0 };
+      groups[did].sumX += b.position[0];
+      groups[did].sumZ += b.position[2];
+      groups[did].count++;
+    }
+
+    return Object.entries(groups)
+      .filter(([, g]) => g.count >= 3) // Only districts with enough buildings
+      .map(([did, g], idx) => ({
+        id: did,
+        center: [g.sumX / g.count, 0, g.sumZ / g.count] as [number, number, number],
+        color: DISTRICT_COLORS[did] ?? '#ffa116',
+        radius: 120 + (idx % 4) * 10,
+        speed: 0.09 + (idx % 3) * 0.015,
+      }));
+  }, [buildings]);
+
+  if (districtCenters.length === 0) {
+    return (
+      <group>
+        <LocalTramLoop center={[0, 0, 0]} color="#ffa116" radius={200} speed={0.10} />
+      </group>
+    );
+  }
+
   return (
     <group>
-      {o.downtown && <LocalTramLoop center={o.downtown} color="#ffa116" radius={150} speed={0.10} />}
-      {o.frontend && <LocalTramLoop center={o.frontend} color="#34d399" radius={155} speed={0.12} />}
-      {o.backend && <LocalTramLoop center={o.backend} color="#60a5fa" radius={148} speed={0.11} />}
-      {o.fullstack && <LocalTramLoop center={o.fullstack} color="#f472b6" radius={152} speed={0.09} />}
-      {o.mobile && <LocalTramLoop center={o.mobile} color="#a7f3d0" radius={150} speed={0.13} />}
-      {o.devops && <LocalTramLoop center={o.devops} color="#f87171" radius={154} speed={0.11} />}
-      {o.data_ai && <LocalTramLoop center={o.data_ai} color="#22d3ee" radius={149} speed={0.10} />}
-      {o.security && <LocalTramLoop center={o.security} color="#818cf8" radius={153} speed={0.12} />}
+      {districtCenters.map((dc) => {
+        // Skip districts too close to origin (would overlap with downtown)
+        const [cx, , cz] = dc.center;
+        if (Math.abs(cx) < 50 && Math.abs(cz) < 50 && dc.id !== 'downtown') return null;
+        return (
+          <LocalTramLoop
+            key={`tram-${dc.id}`}
+            center={dc.center}
+            color={dc.color}
+            radius={dc.radius}
+            speed={dc.speed}
+          />
+        );
+      })}
     </group>
   );
 }

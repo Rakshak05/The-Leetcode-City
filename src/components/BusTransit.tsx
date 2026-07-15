@@ -212,11 +212,11 @@ export function SkyTransitBoard({
   });
 
   return (
-    <Billboard position={[position[0], 85, position[2]]} follow lockX={false} lockY={false} lockZ={false}>
+    <Billboard position={[position[0], 200, position[2]]} follow lockX={false} lockY={false} lockZ={false}>
       <group ref={meshRef}>
       {/* Neon laser beam pointing down to anchor the board */}
-      <mesh ref={laserRef} position={[0, -42.5, 0]}>
-        <cylinderGeometry args={[0.5, 0.5, 85, 8]} />
+      <mesh ref={laserRef} position={[0, -100, 0]}>
+        <cylinderGeometry args={[0.8, 0.8, 200, 8]} />
         <meshStandardMaterial
           color={color}
           emissive={color}
@@ -229,7 +229,7 @@ export function SkyTransitBoard({
 
       {/* Main Board Frame */}
       <mesh>
-        <boxGeometry args={[52, 18, 3]} />
+        <boxGeometry args={[70, 24, 3]} />
         <meshStandardMaterial
           color="#151922"
           roughness={0.2}
@@ -239,7 +239,7 @@ export function SkyTransitBoard({
 
       {/* Glowing Neon Outline Frame */}
       <mesh position={[0, 0, 0.1]}>
-        <boxGeometry args={[53, 19, 0.5]} />
+        <boxGeometry args={[72, 26, 0.5]} />
         <meshStandardMaterial
           color={color}
           emissive={color}
@@ -252,7 +252,7 @@ export function SkyTransitBoard({
       {/* Screen Face (Front) */}
       {texture && (
         <mesh position={[0, 0, 1.55]}>
-          <planeGeometry args={[50, 16]} />
+          <planeGeometry args={[68, 22]} />
           <meshBasicMaterial
             map={texture}
             transparent
@@ -468,7 +468,7 @@ export default function BusTransit({
         ];
         return (
           <group key={`transit-node-${idx}`}>
-            <group position={stopPos} scale={[3, 3, 3]}>
+            <group position={stopPos} scale={[5, 5, 5]}>
               <BusStop
                 position={[0, 0, 0]}
                 rotation={rotY}
@@ -481,8 +481,9 @@ export default function BusTransit({
               district={p.district}
             />
             {/* Tall pulsing beacon column visible from far away */}
-            <mesh position={[stopPos[0], 40, stopPos[2]]}>
-              <cylinderGeometry args={[0.8, 0.8, 80, 6]} />
+            {/* Tall beacon visible from across the city */}
+            <mesh position={[stopPos[0], 250, stopPos[2]]}>
+              <cylinderGeometry args={[1.2, 1.2, 500, 6]} />
               <meshStandardMaterial
                 color="#ffa116"
                 emissive="#ffa116"

@@ -406,16 +406,53 @@ export default function CityHUD() {
                     <span className="block text-[8px] opacity-60 normal-case">Collect PX</span>
                   </button>
                 </div>
-              </div>
+            </div>
             </div>
           )}
 
-          {/* Bottom stats and scoreboard */}
-          <div className="pointer-events-auto flex w-full items-end justify-end">
-            {buildings.length > 0 && (
-              <div className="hidden w-[200px] sm:block">
-                {/* Embedded MiniLeaderboard is used directly as imported component */}
-              </div>
+          {/* Secondary links & keyboard hints */}
+          <div className="pointer-events-auto flex flex-col items-center gap-3">
+            {/* Quick links row */}
+            <div className="hidden sm:flex items-center gap-4 text-[9px] tracking-wider">
+              <Link href="/leaderboard" className="transition-colors hover:text-cream" style={{ color: theme.accent }}>
+                LEADERBOARD
+              </Link>
+              <span className="text-border">│</span>
+              <Link href="/arena" className="transition-colors hover:text-cream" style={{ color: theme.accent }}>
+                ARENA
+              </Link>
+              <span className="text-border">│</span>
+              <Link href={shopHref} className="transition-colors hover:text-cream" style={{ color: theme.accent }}>
+                SHOP
+              </Link>
+              <span className="text-border">│</span>
+              <Link href="/roadmap" className="transition-colors hover:text-cream" style={{ color: theme.accent }}>
+                ROADMAP
+              </Link>
+            </div>
+
+            {/* Live stats footer */}
+            <div className="flex items-center gap-4 text-[8px] text-cream/40 tracking-wider">
+              {buildings.length > 0 && (
+                <span>{buildings.length.toLocaleString()} buildings</span>
+              )}
+              {effectiveLiveCount > 0 && (
+                <span className="flex items-center gap-1">
+                  <span className="inline-block h-1.5 w-1.5 rounded-full animate-pulse" style={{ backgroundColor: '#34d399' }} />
+                  {effectiveLiveCount} live
+                </span>
+              )}
+              {(discordMembers ?? 0) > 0 && (
+                <span>{discordMembers} on Discord</span>
+              )}
+            </div>
+
+            {/* Keyboard hint for desktop */}
+            {!isMobile && buildings.length > 0 && (
+              <p className="hidden sm:block text-[8px] text-cream/25 tracking-wider">
+                Press <kbd className="px-1 py-0.5 border border-border/40 rounded text-[7px] text-cream/40 mx-0.5">E</kbd> to explore
+                 · <kbd className="px-1 py-0.5 border border-border/40 rounded text-[7px] text-cream/40 mx-0.5">F</kbd> to fly
+              </p>
             )}
           </div>
         </div>

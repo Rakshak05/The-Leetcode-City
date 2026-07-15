@@ -2777,8 +2777,8 @@ export default function CityCanvas({
           />
 
           <InterCityConnections />
-          <MetroSystem />
-          <TramSystem />
+          <MetroSystem buildings={buildings} />
+          <TramSystem buildings={buildings} />
           {!wallpaperMode && skyAds && skyAds.length > 0 && (
             <>
               <SkyAds ads={skyAds} cityRadius={cityRadius} flyMode={flyMode} onAdClick={onAdClick} onAdViewed={onAdViewed} />
