@@ -324,6 +324,30 @@ export default function ProfileCard() {
                       {refreshingStats ? "..." : "↻"}
                     </button>
                   </div>
+                  {selectedBuilding.contributions >= 100 && (
+                    <div className="mt-1.5 flex flex-wrap gap-1">
+                      {selectedBuilding.contributions >= 1000 && (
+                        <span className="inline-flex items-center bg-[#bc13fe]/20 border border-[#bc13fe] px-1.5 py-0.5 text-[8px] font-bold text-[#d880ff]" title="1000+ LeetCode problems solved">
+                          🚨 Neon Beacon (1k+)
+                        </span>
+                      )}
+                      {selectedBuilding.contributions >= 500 && (
+                        <span className="inline-flex items-center bg-[#ffd700]/20 border border-[#ffd700] px-1.5 py-0.5 text-[8px] font-bold text-[#ffe680]" title="500+ LeetCode problems solved">
+                          🥇 Gold Milestone (500+)
+                        </span>
+                      )}
+                      {selectedBuilding.contributions >= 300 && (
+                        <span className="inline-flex items-center bg-[#c0c0c0]/20 border border-[#c0c0c0] px-1.5 py-0.5 text-[8px] font-bold text-[#e6e6e6]" title="300+ LeetCode problems solved">
+                          🥈 Silver Milestone (300+)
+                        </span>
+                      )}
+                      {selectedBuilding.contributions >= 100 && (
+                        <span className="inline-flex items-center bg-[#cd7f32]/20 border border-[#cd7f32] px-1.5 py-0.5 text-[8px] font-bold text-[#ffb880]" title="100+ LeetCode problems solved">
+                          🥉 Bronze Milestone (100+)
+                        </span>
+                      )}
+                    </div>
+                  )}
                   {selectedBuilding.active_raid_tag && (
                     <p className="text-[8px] text-red-400">
                       Attacked by @
