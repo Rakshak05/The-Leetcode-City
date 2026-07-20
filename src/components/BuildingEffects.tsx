@@ -1996,3 +1996,154 @@ export const DamageCracks = memo(function DamageCracks({
     </group>
   );
 });
+
+// ─── Milestone Badge (floating beside building) ───────────────
+
+export const MilestoneBadge = memo(function MilestoneBadge({
+  height,
+  width,
+  depth,
+  contributions,
+}: {
+  height: number;
+  width: number;
+  depth: number;
+  contributions: number;
+}) {
+  const groupRef = useRef<THREE.Group>(null);
+  const frameCount = useRef(0);
+
+  let badgeColor = "#cd7f32"; // Bronze
+  let emissiveColor = "#cd7f32";
+
+  if (contributions >= 500) {
+    badgeColor = "#ffd700"; // Gold
+    emissiveColor = "#ffb700";
+  } else if (contributions >= 300) {
+    badgeColor = "#c0c0c0"; // Silver
+    emissiveColor = "#e0e0e0";
+  } else if (contributions < 100) {
+    return null;
+  }
+
+  useFrame((state) => {
+    if (!groupRef.current) return;
+    frameCount.current++;
+    if (frameCount.current % 2 !== 0) return;
+    const t = state.clock.elapsedTime;
+    groupRef.current.position.y = height * 0.6 + Math.sin(t * 2) * 0.8;
+    groupRef.current.rotation.y = t * 1.2;
+  });
+
+  const posX = -width / 2 - 4;
+
+  return (
+    <group ref={groupRef} position={[posX, height * 0.6, 0]}>
+      {/* 3D diamond/octahedron badge */}
+      <mesh>
+        <octahedronGeometry args={[2.5, 0]} />
+        <meshStandardMaterial
+          color={badgeColor}
+          emissive={emissiveColor}
+          emissiveIntensity={2.5}
+          metalness={0.9}
+          roughness={0.1}
+          toneMapped={false}
+        />
+      </mesh>
+      {/* Glowing outer ring */}
+      <mesh rotation={[Math.PI / 2, 0, 0]}>
+        <torusGeometry args={[3.2, 0.3, 8, 24]} />
+        <meshStandardMaterial
+          color={badgeColor}
+          emissive={emissiveColor}
+          emissiveIntensity={1.5}
+          metalness={0.8}
+          roughness={0.2}
+          toneMapped={false}
+        />
+      </mesh>
+    </group>
+  );
+});
+
+// ─── Milestone Beacon (rooftop light beam + neon base glow) ───
+
+export const MilestoneBeacon = memo(function MilestoneBeacon({
+  height,
+  width,
+  depth,
+}: {
+  height: number;
+  width: number;
+  depth: number;
+}) {
+  const beamRef = useRef<THREE.Mesh>(null);
+  const baseRef = useRef<THREE.Mesh>(null);
+  const frameCount = useRef(0);
+
+  useFrame((state, delta) => {
+    if (beamRef.current) {
+      beamRef.current.rotation.y += delta * 1.5;
+    }
+    if (baseRef.current) {
+      frameCount.current++;
+      if (frameCount.current % 3 === 0) {
+        const t = state.clock.elapsedTime;
+        const mat = baseRef.current.material as THREE.MeshStandardMaterial;
+        mat.emissiveIntensity = 4 + Math.sin(t * 6) * 2;
+      }
+    }
+  });
+
+  const beaconColor = "#bc13fe"; // Neon Violet/Purple
+  const beamColor = "#00ffff"; // Cyan beam
+
+  return (
+    <group>
+      {/* Pulse Neon Outline around building base / perimeter */}
+      <NeonOutline width={width} height={height} depth={depth} color={beaconColor} />
+
+      {/* Rooftop Beacon Structure */}
+      <group position={[0, height, 0]}>
+        {/* Base Platform */}
+        <mesh position={[0, 0.5, 0]}>
+          <cylinderGeometry args={[2.5, 3.2, 1, 8]} />
+          <meshStandardMaterial color="#2d2d2d" roughness={0.8} />
+        </mesh>
+        
+        {/* Glowing Lens/Dome */}
+        <mesh ref={baseRef} position={[0, 1.2, 0]}>
+          <sphereGeometry args={[1.5, 16, 16, 0, Math.PI * 2, 0, Math.PI / 2]} />
+          <meshStandardMaterial
+            color={beaconColor}
+            emissive={beaconColor}
+            emissiveIntensity={4}
+            toneMapped={false}
+          />
+        </mesh>
+
+        {/* Rotating Light Beam (Cone) */}
+        <mesh
+          ref={beamRef}
+          position={[0, 1.2, 0]}
+          rotation={[0.3, 0, 0]} // Tilt slightly
+        >
+          {/* Visual cylinder pointing outwards acting as searchlight beam */}
+          <mesh position={[0, 25, 0]}>
+            <cylinderGeometry args={[4, 1.5, 50, 16, 1, true]} />
+            <meshBasicMaterial
+              color={beamColor}
+              transparent
+              opacity={0.3}
+              blending={THREE.AdditiveBlending}
+              depthWrite={false}
+              side={THREE.DoubleSide}
+            />
+          </mesh>
+        </mesh>
+      </group>
+    </group>
+  );
+});
+

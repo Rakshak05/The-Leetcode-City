@@ -32,6 +32,8 @@ import {
   ACBadge,
   TLEFire,
   BinaryTree,
+  MilestoneBadge,
+  MilestoneBeacon,
 } from "./BuildingEffects";
 import { tierFromLevel } from "@/lib/xp";
 import { MiniWhiteRabbit } from "./WhiteRabbit";
@@ -953,6 +955,14 @@ useFrame((state, delta) => {
 
       {!introMode && (
         <BuildingItemEffects building={{ ...building, height: H, width: W, depth: D }} accentColor={accentColor ?? colors.accent ?? "#ffa116"} focused={focused} />
+      )}
+
+      {/* Milestone Visual Effects */}
+      {!introMode && building.contributions >= 1000 && (
+        <MilestoneBeacon height={H} width={W} depth={D} />
+      )}
+      {!introMode && building.contributions >= 100 && building.contributions < 1000 && (
+        <MilestoneBadge height={H} width={W} depth={D} contributions={building.contributions} />
       )}
 
       {!introMode && building.app_streak > 0 && (
