@@ -358,29 +358,33 @@ export async function GET(
       }
       upserted = upsertedResult;
 
-      const [giftsSent, giftsReceived] = await Promise.all([
-        countGifts(sb, upserted.id, "sent"),
-        countGifts(sb, upserted.id, "received"),
-      ]);
+      try {
+        const [giftsSent, giftsReceived] = await Promise.all([
+          countGifts(sb, upserted.id, "sent"),
+          countGifts(sb, upserted.id, "received"),
+        ]);
 
-      await checkAchievements(
-        upserted.id,
-        {
-          contributions: upserted.contributions,
-          public_repos: upserted.public_repos,
-          total_stars: upserted.total_stars,
-          referral_count: upserted.referral_count ?? 0,
-          kudos_count: upserted.kudos_count ?? 0,
-          gifts_sent: giftsSent,
-          gifts_received: giftsReceived,
-          easy_solved: upserted.easy_solved ?? 0,
-          medium_solved: upserted.medium_solved ?? 0,
-          hard_solved: upserted.hard_solved ?? 0,
-          contest_rating: upserted.contest_rating ?? 0,
-          lc_streak: upserted.lc_streak ?? 0,
-        },
-        upserted.github_login,
-      );
+        await checkAchievements(
+          upserted.id,
+          {
+            contributions: upserted.contributions,
+            public_repos: upserted.public_repos,
+            total_stars: upserted.total_stars,
+            referral_count: upserted.referral_count ?? 0,
+            kudos_count: upserted.kudos_count ?? 0,
+            gifts_sent: giftsSent,
+            gifts_received: giftsReceived,
+            easy_solved: upserted.easy_solved ?? 0,
+            medium_solved: upserted.medium_solved ?? 0,
+            hard_solved: upserted.hard_solved ?? 0,
+            contest_rating: upserted.contest_rating ?? 0,
+            lc_streak: upserted.lc_streak ?? 0,
+          },
+          upserted.github_login,
+        );
+      } catch (err) {
+        console.error("[dev/[username]] achievement check failed:", err);
+      }
     }
   }
 

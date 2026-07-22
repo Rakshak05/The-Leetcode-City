@@ -2,6 +2,7 @@ import { getSupabaseAdmin } from "./supabase";
 import { sendAchievementNotification } from "./notification-senders/achievement";
 import { xpForAchievementTier } from "./xp";
 
+// ─── Types ───────────────────────────────────────────────────
 
 export interface Achievement {
   id: string;
@@ -30,13 +31,13 @@ export const TIER_COLORS: Record<string, string> = {
 };
 
 export const TIER_EMOJI: Record<string, string> = {
-  bronze: "\u{1F7E4}", 
-  silver: "\u{26AA}",  
-  gold: "\u{1F7E1}",   
-  diamond: "\u{1F48E}", 
+  bronze: "\u{1F7E4}", // brown circle
+  silver: "\u{26AA}",  // white circle
+  gold: "\u{1F7E1}",   // yellow circle
+  diamond: "\u{1F48E}", // gem
 };
 
-
+/** Numeric order for sorting tiers lowest → highest. */
 export const TIER_ORDER: Record<string, number> = {
   bronze: 0,
   silver: 1,
@@ -44,6 +45,7 @@ export const TIER_ORDER: Record<string, number> = {
   diamond: 3,
 };
 
+// ─── Core Logic ──────────────────────────────────────────────
 
 interface DevStats {
   contributions: number;
@@ -56,7 +58,7 @@ interface DevStats {
   app_streak?: number;
   kudos_streak?: number;
   raid_xp?: number;
-  
+  /** Number of shop items purchased (paid or free). */
   purchases?: number;
   dailies_completed?: number;
   easy_solved?: number;
@@ -67,7 +69,14 @@ interface DevStats {
   total_prs?: number;
 }
 
-
+/**
+ * Check and unlock new achievements for a developer.
+ * - Finds all achievements the dev qualifies for but hasn't unlocked yet
+ * - Batch inserts unlocks
+ * - Grants free items for unlock_item rewards
+ * - Inserts feed events
+ * Returns array of newly unlocked achievement IDs.
+ */
 export async function checkAchievements(
   developerId: number,
   stats: DevStats,
@@ -75,7 +84,7 @@ export async function checkAchievements(
 ): Promise<string[]> {
   const sb = getSupabaseAdmin();
 
-  
+  // Fetch all achievements not yet unlocked by this dev
   const [allRes, unlockedRes] = await Promise.all([
     sb.from("achievements").select("id, category, threshold, tier, name, reward_type, reward_item_id"),
     sb
@@ -147,7 +156,7 @@ export async function checkAchievements(
     .from("developer_achievements")
     .upsert(unlockRows, { onConflict: "developer_id,achievement_id" });
 
-  
+  // Grant free items for unlock_item rewards
   const itemRewards = newUnlocks.filter(
     (a) => a.reward_type === "unlock_item" && a.reward_item_id
   );
@@ -163,7 +172,11 @@ export async function checkAchievements(
       status: "completed",
     }));
 
-   
+    // Use ignoreDuplicates:true instead of a destructive upsert.
+    // If the user already owns this item via a paid Stripe purchase the existing
+    // record (provider:"stripe", amount_cents > 0, Stripe tx id) must NOT be
+    // overwritten. ignoreDuplicates:true translates to INSERT … ON CONFLICT DO NOTHING,
+    // so paid records are preserved and no financial audit data is lost.
     await sb
       .from("purchases")
       .upsert(purchaseRows, { onConflict: "developer_id,item_id", ignoreDuplicates: true });
@@ -190,7 +203,7 @@ export async function checkAchievements(
     }
   }
 
-  
+  // Insert feed events
   if (newUnlocks.length === 1) {
     const a = newUnlocks[0];
     await sb.from("activity_feed").insert({
@@ -204,7 +217,7 @@ export async function checkAchievements(
       },
     });
   } else {
-    
+    // Aggregated: "@user unlocked N achievements"
     await sb.from("activity_feed").insert({
       event_type: "achievement_unlocked",
       actor_id: developerId,
@@ -220,6 +233,7 @@ export async function checkAchievements(
     });
   }
 
+  // Notify developer of gold/diamond achievements (fire-and-forget)
   if (actorLogin) {
     void (async () => {
       try {
@@ -237,26 +251,42 @@ export async function checkAchievements(
   return newUnlocks.map((a) => a.id);
 }
 
-
+/**
+ * Count completed gift purchases sent or received by a developer.
+ * "sent": purchases they paid for that were gifted to someone else.
+ * "received": purchases gifted to them by someone else.
+ *
+ * Throws if the underlying Supabase query fails, instead of silently
+ * treating a database error the same as "zero gifts" — a query failure
+ * (timeout, connection issue, schema change) should never be mistaken
+ * for a real gift count of 0, since that could permanently block a
+ * gift-based achievement from ever unlocking.
+ */
 export async function countGifts(
   admin: ReturnType<typeof getSupabaseAdmin>,
   devId: number,
   direction: "sent" | "received"
 ): Promise<number> {
   const column = direction === "sent" ? "developer_id" : "gifted_to";
-  const { count } = await admin
+  const { count, error } = await admin
     .from("purchases")
     .select("id", { count: "exact", head: true })
     .eq(column, devId)
     .eq("status", "completed")
     .not("gifted_to", "is", null);
+  if (error) {
+    throw new Error(`countGifts(${direction}) query failed: ${error.message}`);
+  }
   return count ?? 0;
 }
 
 /** Max IDs per Supabase `.in()` query to avoid URL length limits. */
 const CHUNK_SIZE = 500;
 
-
+/**
+ * Batch fetch achievements for multiple developers (for city API).
+ * Automatically chunks large ID arrays to stay within Supabase query limits.
+ */
 export async function getAchievementsForDevelopers(
   developerIds: number[]
 ): Promise<Record<number, string[]>> {
