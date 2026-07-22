@@ -584,7 +584,7 @@ export function generateCityLayout(devs: DeveloperRecord[]): {
         }
       }
 
-      // BUNGALOW OVERRIDE
+      // BUNGALOW OVERRIDE (applied uniformly to all users — Fixes #825)
       if (dev.building_style === "bungalow") {
         w = 80;
         d = 60;
@@ -777,7 +777,7 @@ export function generateCityLayout(devs: DeveloperRecord[]): {
     // Plaza at center of the district [0, 0] relative
     if (addPlaza) {
       const px = origin[0];
-      const pcz = origin[2];
+      const pcz = origin[2]+150;
       plazas.push({
         position: [px, 0, pcz],
         size: Math.min(BLOCK_FOOTPRINT_X, BLOCK_FOOTPRINT_Z) * 0.8,
@@ -1203,7 +1203,7 @@ export function calcBuildingDims(
   v2Data?: Partial<DeveloperRecord>,
   buildingStyle?: string,
 ): { width: number; height: number; depth: number } {
-  // BUNGALOW OVERRIDE — must match generateCityLayout
+  // BUNGALOW OVERRIDE — must match generateCityLayout (Fixes #825)
   if (buildingStyle === "bungalow") {
     return { width: 80, height: 25, depth: 60 };
   }
