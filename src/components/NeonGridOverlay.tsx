@@ -80,7 +80,7 @@ export default function NeonGridOverlay({ accentColor }: NeonGridOverlayProps) {
   const uniforms = useMemo(
     () => ({
       uTime: { value: 0 },
-      uColor: { value: new THREE.Color(accentColor) },
+      uColor: { value: new THREE.Color() },
     }),
     []
   );
